@@ -1,0 +1,110 @@
+/* style.css */
+
+/* Global Reset and Base Styling */
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+  
+  body {
+    font-family: 'Roboto', sans-serif;
+    background: url('assets/images/ufc.jpg') no-repeat center center fixed;
+    background-size: cover;
+    color: #fff;
+  }
+  
+  #app-container {
+    max-width: 900px;
+    margin: 40px auto;
+    padding: 20px;
+    background: rgba(0, 0, 0, 0.7);
+    border-radius: 8px;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+  }
+  
+  /* Headings */
+  h1, h2 {
+    margin-bottom: 10px;
+    text-align: center;
+    color: #ffcc00;
+  }
+  
+  h3 {
+    margin-bottom: 8px;
+    color: #ffcc00;
+  }
+  
+  /* Screen container */
+  .screen {
+    display: none; /* Shown by JS */
+    padding: 20px;
+  }
+  
+  /* Buttons */
+  button {
+    background: #ff4500;
+    color: #fff;
+    border: none;
+    padding: 10px 16px;
+    border-radius: 4px;
+    cursor: pointer;
+    margin-top: 15px;
+    font-size: 1em;
+  }
+  button:hover {
+    background: #e03e00;
+  }
+  
+  /* Form elements */
+  label {
+    font-weight: bold;
+  }
+  
+  /* Chat Container */
+  .chat-container {
+    border: 2px solid #ffcc00;
+    border-radius: 4px;
+    height: 200px;
+    overflow-y: auto;
+    padding: 10px;
+    background: rgba(255,255,255,0.1);
+    margin: 10px 0;
+  }
+  
+  .chat-message {
+    margin-bottom: 8px;
+  }
+  .chat-message .user-name {
+    font-weight: bold;
+    color: #ffcc00;
+    margin-right: 6px;
+  }
+  
+  /* Wager Section */
+  #wager-container, .wager-scale {
+    margin: 10px 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  input[type="range"] {
+    width: 100%;
+  }
+  
+  /* Fighter Table Styling */
+  .fighter-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 20px 0;
+  }
+  .fighter-table th,
+  .fighter-table td {
+    border: 1px solid #ffcc00;
+    padding: 8px;
+    text-align: center;
+  }
+  .fighter-table th {
+    background: rgba(255, 204, 0, 0.2);
+  }
+  

@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Fight Prediction Experiment</title>
+  <link rel="stylesheet" href="style.css" />
+
+  <!-- Optionally include jsPsych or other libraries here
+       <script src="https://unpkg.com/jspsych/dist/jspsych.js"></script>
+       <link rel="stylesheet" href="https://unpkg.com/jspsych/dist/jspsych.css" />
+  -->
+
+  <!-- Load global config if needed -->
+  <script src="config.js"></script>
+
+  <!-- Load main scripts in order -->
+  <script src="modules/utilities.js"></script>
+  <script src="modules/preTask.js"></script>
+  <script src="modules/chat.js"></script>
+  <script src="modules/trialPhase.js"></script>
+  <script src="modules/postTask.js"></script>
+  <script src="main.js"></script>
+</head>
+<body>
+  <div id="app-container">
+    <!-- The entire experiment will render inside this container -->
+    <!-- Pre-task, waiting room, trials, and post-task screens will be inserted dynamically by JS -->
+  </div>
+</body>
+</html>
