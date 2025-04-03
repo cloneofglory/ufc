@@ -1,9 +1,89 @@
+const fs = require("fs");
+const path = require("path");
+const csv = require("csv-parser");
+
 const { admin, firestore } = require("./firebaseConfig");
 const WAITING_DURATION = 30000; // 30 seconds
+
+const AI_MODES = ["goodAI", "badAI", "neutralAI"];
+
+// Validate available AI modes
+const AVAILABLE_AI_MODES = [];
+AI_MODES.forEach((mode) => {
+  const dirPath = path.join(__dirname, "../data", mode);
+  if (fs.existsSync(dirPath)) {
+    AVAILABLE_AI_MODES.push(mode);
+  } else {
+    console.warn(
+      `Warning: AI mode directory '${mode}' does not exist and will be skipped`
+    );
+  }
+});
+
+// Exit if no AI modes are available
+if (AVAILABLE_AI_MODES.length === 0) {
+  console.error(
+    "Error: No valid AI mode directories found. Exiting application."
+  );
+  process.exit(1);
+}
+
+console.log(`Available AI modes: ${AVAILABLE_AI_MODES.join(", ")}`);
+
+async function readCsvFile(filePath) {
+  return new Promise((resolve, reject) => {
+    if (!filePath) {
+      return reject(new Error("No file path provided for CSV reading"));
+    }
+    if (!fs.existsSync(filePath)) {
+      return reject(new Error(`CSV file does not exist: ${filePath}`));
+    }
+
+    const results = [];
+    fs.createReadStream(filePath)
+      .on("error", (error) => {
+        console.error(`Error reading CSV file ${filePath}:`, error);
+        reject(error);
+      })
+      .pipe(csv())
+      .on("data", (data) => results.push(data))
+      .on("end", () => {
+        console.log(`CSV file read: ${filePath} with ${results.length} rows`);
+        resolve(results);
+      })
+      .on("error", (error) => {
+        console.error(`Error parsing CSV file ${filePath}:`, error);
+        reject(error);
+      });
+  });
+}
+
+async function findTrialSetCsv(directoryPath) {
+  return new Promise((resolve, reject) => {
+    if (!fs.existsSync(directoryPath)) {
+      return reject(new Error(`Directory does not exist: ${directoryPath}`));
+    }
+
+    fs.readdir(directoryPath, (err, files) => {
+      if (err) return reject(err);
+
+      const csvFile = files.find(
+        (file) => file.startsWith("trial_set") && file.endsWith(".csv")
+      );
+      if (csvFile) {
+        resolve(path.join(directoryPath, csvFile));
+      } else {
+        reject(new Error(`No trial_set CSV file found in ${directoryPath}`));
+      }
+    });
+  });
+}
 
 const sessionManager = {
   updateCallback: null,
   clientSessions: new Map(), // Map to track which session each client belongs to
+  lastSoloAiMode: null,
+  lastGroupAiMode: null,
 
   // Allows setting an update callback (e.g., to broadcast session updates)
   setUpdateCallback(callback) {
@@ -49,13 +129,17 @@ const sessionManager = {
 
         // If the session is now full (3 participants), update to group mode.
         if (sessionData.participants.length === 3) {
+          const aiModeData = await this.determineAiMode("group");
           await waitingSessionDoc.ref.update({
             status: "running",
             mode: "group",
             waitingEndTime: admin.firestore.Timestamp.fromMillis(now),
+            aiMode: aiModeData.aiMode,
+            csvFilePath: aiModeData.csvFilePath,
+            trialCount: aiModeData.trialData.length,
           });
           console.log(
-            `Session ${waitingSessionDoc.id} is now running as a group session.`
+            `Session ${waitingSessionDoc.id} is now running as a group session using ${aiModeData.aiMode}.`
           );
           if (this.updateCallback) {
             this.updateCallback({
@@ -335,6 +419,121 @@ const sessionManager = {
     }
   },
 
+  async determineAiMode(mode) {
+    try {
+      // Get the last sessions of this mode to determine next AI mode
+      const sessionsRef = firestore.collection("sessions");
+      const querySnapshot = await sessionsRef
+        .where("mode", "==", mode)
+        .orderBy("createdAt", "desc")
+        .limit(AVAILABLE_AI_MODES.length)
+        .get();
+
+      // Default to first available mode for the first ever session
+      let nextAiMode = AVAILABLE_AI_MODES[0];
+
+      if (!querySnapshot.empty) {
+        const recentModes = [];
+        querySnapshot.docs.forEach((doc) => {
+          const aiMode = doc.data().aiMode;
+          if (aiMode && !recentModes.includes(aiMode)) {
+            recentModes.push(aiMode);
+          }
+        });
+
+        if (recentModes.length > 0) {
+          const lastMode = recentModes[0];
+          const lastModeIndex = AVAILABLE_AI_MODES.indexOf(lastMode);
+
+          if (lastModeIndex !== -1) {
+            const nextModeIndex =
+              (lastModeIndex + 1) % AVAILABLE_AI_MODES.length;
+            nextAiMode = AVAILABLE_AI_MODES[nextModeIndex];
+          }
+        }
+      }
+
+      if (mode === "solo") {
+        this.lastSoloAiMode = nextAiMode;
+      } else if (mode === "group") {
+        this.lastGroupAiMode = nextAiMode;
+      }
+
+      let csvFilePath = null;
+      let trialData = [];
+
+      try {
+        const aiFolder = nextAiMode;
+        csvFilePath = await findTrialSetCsv(
+          path.join(__dirname, "../data", aiFolder)
+        );
+        trialData = await readCsvFile(csvFilePath);
+
+        console.log(
+          `Session mode: ${mode}, Using AI mode: ${nextAiMode}, File: ${csvFilePath}, Rows: ${trialData.length}`
+        );
+      } catch (error) {
+        console.error(`Error reading CSV for mode ${nextAiMode}:`, error);
+        for (const fallbackMode of AVAILABLE_AI_MODES) {
+          if (fallbackMode !== nextAiMode) {
+            try {
+              csvFilePath = await findTrialSetCsv(
+                path.join(__dirname, "../data", fallbackMode)
+              );
+              trialData = await readCsvFile(csvFilePath);
+              nextAiMode = fallbackMode;
+              console.log(
+                `FALLBACK: Using AI mode: ${nextAiMode}, File: ${csvFilePath}, Rows: ${trialData.length}`
+              );
+              break;
+            } catch (fallbackError) {
+              console.error(
+                `Fallback mode ${fallbackMode} also failed:`,
+                fallbackError
+              );
+            }
+          }
+        }
+      }
+
+      return {
+        aiMode: nextAiMode,
+        csvFilePath,
+        trialData,
+      };
+    } catch (error) {
+      console.error("Error determining AI mode:", error);
+
+      try {
+        const defaultMode = AVAILABLE_AI_MODES[0];
+        const csvFilePath = await findTrialSetCsv(
+          path.join(__dirname, "../data", defaultMode)
+        );
+        const trialData = await readCsvFile(csvFilePath);
+
+        console.log(
+          `EMERGENCY FALLBACK: Using first available AI mode: ${defaultMode}`
+        );
+
+        return {
+          aiMode: defaultMode,
+          csvFilePath,
+          trialData,
+        };
+      } catch (finalError) {
+        console.error(
+          "Fatal error - cannot read any trial data files:",
+          finalError
+        );
+        return {
+          aiMode: "unknown",
+          csvFilePath: null,
+          trialData: [],
+        };
+      }
+    }
+  },
+
   /**
    * Gets the session ID for a specific client.
    */
@@ -386,13 +585,19 @@ async function createNewWaitingSession(clientID) {
 
         // Improved logic to handle different participant counts
         if (data.participants.length === 1) {
+          const aiModeData = await sessionManager.determineAiMode("solo");
           // Just one participant - start solo mode
           await sessionRef.update({
             status: "running",
             mode: "solo",
             waitingEndTime: admin.firestore.Timestamp.fromMillis(nowTimeout),
+            aiMode: aiModeData.aiMode,
+            csvFilePath: aiModeData.csvFilePath,
+            trialCount: aiModeData.trialData.length,
           });
-          console.log(`Session ${sessionID} updated to running (solo).`);
+          console.log(
+            `Session ${sessionID} updated to running (solo) using ${aiModeData.aiMode}.`
+          );
           if (sessionManager.updateCallback) {
             sessionManager.updateCallback({
               sessionID: sessionID,
@@ -425,6 +630,7 @@ async function createNewWaitingSession(clientID) {
             waitingEndTime: admin.firestore.Timestamp.fromMillis(nowTimeout),
           });
         } else if (data.participants.length >= 3) {
+          const aiModeData = await sessionManager.determineAiMode("group");
           // 3 or more participants - make first 3 a group, rest go solo
           const allParticipants = [...data.participants];
           const groupParticipants = allParticipants.slice(0, 3);
@@ -436,6 +642,9 @@ async function createNewWaitingSession(clientID) {
             mode: "group",
             participants: groupParticipants,
             waitingEndTime: admin.firestore.Timestamp.fromMillis(nowTimeout),
+            aiMode: aiModeData.aiMode,
+            csvFilePath: aiModeData.csvFilePath,
+            trialCount: aiModeData.trialData.length,
           });
           console.log(
             `Session ${sessionID} updated to running (group) with ${groupParticipants.length} participants.`
@@ -478,15 +687,21 @@ async function createNewWaitingSession(clientID) {
 
 async function createSoloSession(clientID) {
   const sessionRef = firestore.collection("sessions").doc();
+  const aiModeData = await sessionManager.determineAiMode("solo");
   const sessionData = {
     createdAt: admin.firestore.Timestamp.now(),
     endedAt: null,
     participants: [clientID],
     status: "running",
     mode: "solo",
+    aiMode: aiModeData.aiMode,
+    csvFilePath: aiModeData.csvFilePath,
+    trialCount: aiModeData.trialData.length,
   };
   await sessionRef.set(sessionData);
-  console.log(`Created solo session ${sessionRef.id} for ${clientID}`);
+  console.log(
+    `Created solo session ${sessionRef.id} for ${clientID} using ${aiModeData.aiMode}`
+  );
   return sessionRef.id;
 }
 

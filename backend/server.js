@@ -1,5 +1,6 @@
 const WebSocket = require("ws");
 const sessionManager = require("./session");
+const { firestore } = require("./firebaseConfig");
 
 const wss = new WebSocket.Server({ port: 8080 });
 let clients = new Map();
@@ -45,19 +46,57 @@ function broadcastSessionUpdate(updateData) {
 function initializeSessionState(sessionID, mode) {
   if (!sessionID) return;
 
-  sessionStates.set(sessionID, {
-    currentTrial: 1,
-    totalTrials: 5, // For testing (use 50 in production)
-    currentPhase: mode === "group" ? PHASES.GROUP_DELIB : PHASES.INITIAL,
-    phaseStartTime: Date.now(),
-    mode: mode,
-    participants: [],
-    participantData: {},
-    trialResults: [],
-  });
+  // Get the session data to access AI mode
+  const getSessionData = async () => {
+    try {
+      const sessionRef = firestore.collection("sessions").doc(sessionID);
+      const sessionDoc = await sessionRef.get();
+      if (sessionDoc.exists) {
+        const sessionData = sessionDoc.data();
 
-  // Start the trial phase synchronization for this session
-  startTrialPhase(sessionID);
+        // Initialize session state with AI mode data
+        sessionStates.set(sessionID, {
+          currentTrial: 1,
+          totalTrials: 5, // For testing (use 50 in production)
+          currentPhase: mode === "group" ? PHASES.GROUP_DELIB : PHASES.INITIAL,
+          phaseStartTime: Date.now(),
+          mode: mode,
+          participants: sessionData.participants || [],
+          participantData: {},
+          trialResults: [],
+          // Add AI mode data
+          aiMode: sessionData.aiMode || "goodAI",
+          csvFilePath: sessionData.csvFilePath || null,
+          trialCount: sessionData.trialCount || 0,
+        });
+
+        console.log(
+          `Session ${sessionID} initialized with ${
+            sessionData.aiMode || "default"
+          } AI mode`
+        );
+
+        // Start the trial phase synchronization for this session
+        startTrialPhase(sessionID);
+      }
+    } catch (error) {
+      console.error("Error getting session data:", error);
+      // Fallback initialization
+      sessionStates.set(sessionID, {
+        currentTrial: 1,
+        totalTrials: 5,
+        currentPhase: mode === "group" ? PHASES.GROUP_DELIB : PHASES.INITIAL,
+        phaseStartTime: Date.now(),
+        mode: mode,
+        participants: [],
+        participantData: {},
+        trialResults: [],
+      });
+      startTrialPhase(sessionID);
+    }
+  };
+
+  getSessionData();
 }
 
 function startTrialPhase(sessionID) {
@@ -82,6 +121,10 @@ function startTrialPhase(sessionID) {
     duration: duration,
     chatDuration:
       state.currentPhase === PHASES.GROUP_DELIB ? CHAT_DURATION : null,
+    aiMode: sessionStates.get(sessionID).aiMode,
+    trialData: sessionStates.get(sessionID).trialData
+      ? sessionStates.get(sessionID).trialData[state.currentTrial - 1]
+      : null,
   });
 
   // Schedule the next phase transition
