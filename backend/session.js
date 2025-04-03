@@ -1,10 +1,8 @@
-// session.js
-
 const { admin, firestore } = require("./firebaseConfig");
 const WAITING_DURATION = 30000; // 30 seconds
 
 const sessionManager = {
-  updateCallback: null, // Callback to notify session updates
+  updateCallback: null,
   clientSessions: new Map(), // Map to track which session each client belongs to
 
   // Allows setting an update callback (e.g., to broadcast session updates)
@@ -81,30 +79,98 @@ const sessionManager = {
       }
       // Case 2: Waiting session exists with 2 participants and waiting time elapsed.
       else if (
-        sessionData.participants.length === 2 &&
+        sessionData.participants.length >= 2 &&
         elapsed >= WAITING_DURATION
       ) {
-        for (const participant of sessionData.participants) {
-          const soloSessionID = await createSoloSession(participant);
-          this.clientSessions.set(participant, soloSessionID);
-          console.log(
-            `Created solo session ${soloSessionID} for ${participant}`
-          );
+        // Get the participants and process them
+        const participantsToBeSplit = [...sessionData.participants];
+
+        // If there are 3 or more participants, create a group with first 3
+        if (participantsToBeSplit.length >= 3) {
+          // Get first 3 participants for group session
+          const groupParticipants = participantsToBeSplit.splice(0, 3);
+
+          // Update existing session to be a group session
+          await waitingSessionDoc.ref.update({
+            status: "running",
+            mode: "group",
+            participants: groupParticipants,
+            waitingEndTime: admin.firestore.Timestamp.fromMillis(now),
+          });
+
+          // Update client sessions for group participants
+          for (const participant of groupParticipants) {
+            this.clientSessions.set(participant, waitingSessionDoc.id);
+          }
+
+          // Notify about group session
           if (this.updateCallback) {
             this.updateCallback({
-              sessionID: soloSessionID,
+              sessionID: waitingSessionDoc.id,
               status: "running",
-              mode: "solo",
+              mode: "group",
               waitingEndTime: now,
-              clientID: participant,
             });
           }
+
+          // Create solo sessions for remaining participants
+          for (const participant of participantsToBeSplit) {
+            const soloSessionID = await createSoloSession(participant);
+            this.clientSessions.set(participant, soloSessionID);
+            console.log(
+              `Created solo session ${soloSessionID} for ${participant}`
+            );
+            if (this.updateCallback) {
+              this.updateCallback({
+                sessionID: soloSessionID,
+                status: "running",
+                mode: "solo",
+                waitingEndTime: now,
+                clientID: participant,
+              });
+            }
+          }
+
+          // Return appropriate session info for the current client
+          const currentClientSessionID = this.clientSessions.get(clientID);
+          const currentClientMode =
+            currentClientSessionID === waitingSessionDoc.id ? "group" : "solo";
+          return {
+            sessionID: currentClientSessionID,
+            waitingEndTime: now,
+            mode: currentClientMode,
+          };
+        } else {
+          // Handle case with exactly 2 participants - create solo sessions for both
+          for (const participant of participantsToBeSplit) {
+            const soloSessionID = await createSoloSession(participant);
+            this.clientSessions.set(participant, soloSessionID);
+            console.log(
+              `Created solo session ${soloSessionID} for ${participant}`
+            );
+            if (this.updateCallback) {
+              this.updateCallback({
+                sessionID: soloSessionID,
+                status: "running",
+                mode: "solo",
+                waitingEndTime: now,
+                clientID: participant,
+              });
+            }
+          }
+
+          await waitingSessionDoc.ref.update({ status: "ended" });
+
+          // Create solo session for the new client too
+          const soloSessionID = await createSoloSession(clientID);
+          this.clientSessions.set(clientID, soloSessionID);
+          console.log(`Created solo session ${soloSessionID} for ${clientID}`);
+          return {
+            sessionID: soloSessionID,
+            waitingEndTime: now,
+            mode: "solo",
+          };
         }
-        await waitingSessionDoc.ref.update({ status: "ended" });
-        const soloSessionID = await createSoloSession(clientID);
-        this.clientSessions.set(clientID, soloSessionID);
-        console.log(`Created solo session ${soloSessionID} for ${clientID}`);
-        return { sessionID: soloSessionID, waitingEndTime: now, mode: "solo" };
       }
       // Fallback: Create a new waiting session.
       else {
@@ -151,45 +217,78 @@ const sessionManager = {
     const sessionRef = firestore.collection("sessions").doc(sessionID);
 
     if (payload.event === "trialData") {
-      console.log(payload.data);
       if (payload.data.mode === "group") {
         // For group mode, aggregate individual trial data.
         const trialDocId = `trial_${payload.data.trialNumber}_group`;
         const trialDocRef = sessionRef.collection("trials").doc(trialDocId);
         await firestore.runTransaction(async (transaction) => {
           const doc = await transaction.get(trialDocRef);
-          const commonData = {
-            trialNumber: payload.data.trialNumber,
-            mode: "group",
-            fighterData: payload.data.fighterData,
-            aiPrediction: payload.data.aiPrediction,
-            aiRationale: payload.data.aiRationale,
+
+          // Clean up duplicate data in payload
+          const cleanPayload = {
+            ...payload.data,
+            aiPrediction: undefined,
+            aiRationale: undefined,
           };
+
+          const commonData = {
+            trialNumber: cleanPayload.trialNumber,
+            mode: "group",
+            fighterData: cleanPayload.fighterData,
+            chatMessages: doc.exists ? doc.data().chatMessages || [] : [],
+          };
+
+          // Add any new chat messages to the trial-level chatMessages
+          if (
+            cleanPayload.chatMessages &&
+            cleanPayload.chatMessages.length > 0
+          ) {
+            const existingMsgIds = new Set();
+
+            // Create a set of existing message IDs to avoid duplicates
+            if (commonData.chatMessages.length > 0) {
+              commonData.chatMessages.forEach((msg) => {
+                existingMsgIds.add(`${msg.user}_${msg.timestamp}`);
+              });
+            }
+
+            // Add only new messages
+            cleanPayload.chatMessages.forEach((msg) => {
+              const msgId = `${msg.user}_${msg.timestamp}`;
+              if (!existingMsgIds.has(msgId)) {
+                commonData.chatMessages.push(msg);
+              }
+            });
+          }
+
           let submissions = {};
           if (!doc.exists) {
-            submissions[payload.data.clientID] = {
-              initialWager: payload.data.initialWager,
-              finalWager: payload.data.finalWager,
-              chatMessages: payload.data.chatMessages,
-              timestamp: payload.data.timestamp,
+            submissions[cleanPayload.clientID] = {
+              initialWager: cleanPayload.initialWager,
+              finalWager: cleanPayload.finalWager,
+              timestamp: cleanPayload.timestamp,
             };
             transaction.set(trialDocRef, { ...commonData, submissions });
           } else {
             const existingData = doc.data();
             submissions = existingData.submissions || {};
-            submissions[payload.data.clientID] = {
-              initialWager: payload.data.initialWager,
-              finalWager: payload.data.finalWager,
-              chatMessages: payload.data.chatMessages,
-              timestamp: payload.data.timestamp,
+            submissions[cleanPayload.clientID] = {
+              initialWager: cleanPayload.initialWager,
+              finalWager: cleanPayload.finalWager,
+              timestamp: cleanPayload.timestamp,
             };
-            transaction.update(trialDocRef, { submissions });
+            transaction.update(trialDocRef, {
+              submissions,
+              chatMessages: commonData.chatMessages,
+            });
           }
         });
+        console.log(payload.data);
         console.log(
           `Aggregated group trial data updated for trial ${payload.data.trialNumber}`
         );
       } else {
+        console.log(payload.data);
         // Solo mode: store each trial as a separate document.
         await sessionRef.collection("trials").add(payload.data);
         console.log(
@@ -284,7 +383,10 @@ async function createNewWaitingSession(clientID) {
       const data = sessionSnap.data();
       if (data.status === "waiting") {
         const nowTimeout = Date.now();
+
+        // Improved logic to handle different participant counts
         if (data.participants.length === 1) {
+          // Just one participant - start solo mode
           await sessionRef.update({
             status: "running",
             mode: "solo",
@@ -299,13 +401,65 @@ async function createNewWaitingSession(clientID) {
               waitingEndTime: nowTimeout,
             });
           }
-        } else if (data.participants.length === 3) {
+        } else if (data.participants.length === 2) {
+          // Create solo sessions for both participants
+          for (const participant of data.participants) {
+            const soloSessionID = await createSoloSession(participant);
+            sessionManager.clientSessions.set(participant, soloSessionID);
+            console.log(
+              `Created solo session ${soloSessionID} for ${participant}`
+            );
+            if (sessionManager.updateCallback) {
+              sessionManager.updateCallback({
+                sessionID: soloSessionID,
+                status: "running",
+                mode: "solo",
+                waitingEndTime: nowTimeout,
+                clientID: participant,
+              });
+            }
+          }
+          // Mark the waiting session as ended since we've moved participants to solo sessions
+          await sessionRef.update({
+            status: "ended",
+            waitingEndTime: admin.firestore.Timestamp.fromMillis(nowTimeout),
+          });
+        } else if (data.participants.length >= 3) {
+          // 3 or more participants - make first 3 a group, rest go solo
+          const allParticipants = [...data.participants];
+          const groupParticipants = allParticipants.slice(0, 3);
+          const soloParticipants = allParticipants.slice(3);
+
+          // Update current session to group for first 3 participants
           await sessionRef.update({
             status: "running",
             mode: "group",
+            participants: groupParticipants,
             waitingEndTime: admin.firestore.Timestamp.fromMillis(nowTimeout),
           });
-          console.log(`Session ${sessionID} updated to running (group).`);
+          console.log(
+            `Session ${sessionID} updated to running (group) with ${groupParticipants.length} participants.`
+          );
+
+          // Create solo sessions for remaining participants
+          for (const participant of soloParticipants) {
+            const soloSessionID = await createSoloSession(participant);
+            sessionManager.clientSessions.set(participant, soloSessionID);
+            console.log(
+              `Created solo session ${soloSessionID} for ${participant}`
+            );
+            if (sessionManager.updateCallback) {
+              sessionManager.updateCallback({
+                sessionID: soloSessionID,
+                status: "running",
+                mode: "solo",
+                waitingEndTime: nowTimeout,
+                clientID: participant,
+              });
+            }
+          }
+
+          // Notify about the group session update
           if (sessionManager.updateCallback) {
             sessionManager.updateCallback({
               sessionID: sessionID,

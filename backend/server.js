@@ -1,5 +1,3 @@
-// server.js
-
 const WebSocket = require("ws");
 const sessionManager = require("./session");
 
@@ -140,7 +138,6 @@ function broadcastToSession(sessionID, message) {
 
   const messageStr = JSON.stringify(message);
   clients.forEach((clientWs, clientID) => {
-    // Check if this client belongs to the session (this requires updating the clients map)
     const clientSession = getClientSession(clientID);
     if (clientSession === sessionID && clientWs.readyState === WebSocket.OPEN) {
       clientWs.send(messageStr);

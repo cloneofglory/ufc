@@ -1,5 +1,3 @@
-// modules/preTask.js
-
 const preTask = (function () {
   let appContainer;
   let preTaskScreen, waitingRoomScreen;

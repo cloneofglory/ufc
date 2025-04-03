@@ -1,5 +1,3 @@
-// modules/trialPhase.js
-
 let trialResults = [];
 let groupChatMessages = [];
 let initialWager = 2;
@@ -578,16 +576,20 @@ const trialPhase = (function () {
     initialScreen.querySelector("#solo-trial-number").textContent =
       currentTrial;
     loadTrialData();
+
+    // Reset the initialWager to midpoint (2) for each new trial
+    initialWager = 2;
+
     const contentEl = initialScreen.querySelector("#initial-content");
     const wallet = utilities.getWallet();
     contentEl.innerHTML = `
-      <p><strong>Wallet:</strong> $${wallet}</p>
+      <p><strong>Wallet:</strong> ${wallet}</p>
       ${generateFighterTableHTML()}
       <p><strong>AI Prediction:</strong> ${currentFightData.aiPrediction}</p>
       <p><strong>Rationale:</strong> ${currentFightData.aiRationale}</p>
       <div style="margin-top: 20px;">
         <label>Initial Wager (0-4):</label>
-        <input type="range" min="0" max="4" step="1" value="${initialWager}" id="initial-wager-range" />
+        <input type="range" min="0" max="4" step="1" value="2" id="initial-wager-range" />
       </div>
       <div id="solo-initial-countdown" style="margin-top:10px;"></div>
     `;
@@ -608,10 +610,14 @@ const trialPhase = (function () {
     groupDelibScreen.querySelector("#group-trial-number").textContent =
       currentTrial;
     loadTrialData();
+
+    // Reset the initialWager to midpoint (2) for each new trial
+    initialWager = 2;
+
     const fightInfoEl = groupDelibScreen.querySelector("#group-fight-info");
     const wallet = utilities.getWallet();
     fightInfoEl.innerHTML = `
-      <p><strong>Wallet:</strong> $${wallet}</p>
+      <p><strong>Wallet:</strong> ${wallet}</p>
       ${generateFighterTableHTML()}
       <p><strong>AI Prediction:</strong> ${currentFightData.aiPrediction}</p>
       <p><strong>Rationale:</strong> ${currentFightData.aiRationale}</p>
@@ -621,9 +627,9 @@ const trialPhase = (function () {
     groupDelibScreen.querySelector("#chat-messages").innerHTML = "";
     groupDelibScreen.querySelector("#confirmed-wagers").innerHTML = "";
 
-    // Reset wager UI
+    // Reset wager UI to midpoint (2)
     const wagerSlider = groupDelibScreen.querySelector("#group-wager-range");
-    wagerSlider.value = initialWager;
+    wagerSlider.value = 2;
     wagerSlider.disabled = false;
     groupDelibScreen.querySelector("#btn-confirm-group-wager").disabled = false;
 
@@ -643,16 +649,19 @@ const trialPhase = (function () {
     );
     const wallet = utilities.getWallet();
     contentEl.innerHTML = `
-      <p><strong>Wallet:</strong> $${wallet}</p>
+      <p><strong>Wallet:</strong> ${wallet}</p>
       ${generateFighterTableHTML()}
       <p><strong>AI Prediction:</strong> ${currentFightData.aiPrediction}</p>
       <p><strong>Rationale:</strong> ${currentFightData.aiRationale}</p>
       <div style="margin-top: 20px;">
         <label>Stake (0-4):</label>
-        <input type="range" min="0" max="4" step="1" value="${finalWager}" id="final-wager-range" />
+        <input type="range" min="0" max="4" step="1" value="${initialWager}" id="final-wager-range" />
       </div>
       <div id="final-decision-countdown" style="margin-top:10px;"></div>
     `;
+
+    // Set finalWager to match initialWager initially
+    finalWager = initialWager;
 
     // Add event listener for wager slider
     const finalWagerSlider = contentEl.querySelector("#final-wager-range");
@@ -708,12 +717,28 @@ const trialPhase = (function () {
     trialDataSaved = true;
 
     const clientID = sessionStorage.getItem("PROLIFIC_PID") || "unknown";
+    // const trialData = {
+    //   trialNumber: currentTrial,
+    //   mode: isSolo ? "solo" : "group",
+    //   fighterData: currentFightData,
+    //   aiPrediction: currentFightData.aiPrediction,
+    //   aiRationale: currentFightData.aiRationale,
+    //   initialWager: initialWager,
+    //   finalWager: finalWager,
+    //   chatMessages: isSolo ? [] : groupChatMessages,
+    //   aiCorrect: serverAiCorrect,
+    //   walletBefore: walletBefore,
+    //   walletAfter: walletAfter,
+    //   timestamp: new Date().toISOString(),
+    //   clientID: clientID,
+    //   sessionID: sessionID,
+    // };
     const trialData = {
       trialNumber: currentTrial,
       mode: isSolo ? "solo" : "group",
-      fighterData: currentFightData,
-      aiPrediction: currentFightData.aiPrediction,
-      aiRationale: currentFightData.aiRationale,
+      fighterData: {
+        ...currentFightData,
+      },
       initialWager: initialWager,
       finalWager: finalWager,
       chatMessages: isSolo ? [] : groupChatMessages,
