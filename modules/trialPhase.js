@@ -717,22 +717,6 @@ const trialPhase = (function () {
     trialDataSaved = true;
 
     const clientID = sessionStorage.getItem("PROLIFIC_PID") || "unknown";
-    // const trialData = {
-    //   trialNumber: currentTrial,
-    //   mode: isSolo ? "solo" : "group",
-    //   fighterData: currentFightData,
-    //   aiPrediction: currentFightData.aiPrediction,
-    //   aiRationale: currentFightData.aiRationale,
-    //   initialWager: initialWager,
-    //   finalWager: finalWager,
-    //   chatMessages: isSolo ? [] : groupChatMessages,
-    //   aiCorrect: serverAiCorrect,
-    //   walletBefore: walletBefore,
-    //   walletAfter: walletAfter,
-    //   timestamp: new Date().toISOString(),
-    //   clientID: clientID,
-    //   sessionID: sessionID,
-    // };
     const trialData = {
       trialNumber: currentTrial,
       mode: isSolo ? "solo" : "group",
