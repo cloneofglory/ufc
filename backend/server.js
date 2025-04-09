@@ -64,7 +64,6 @@ function initializeSessionState(sessionID, mode) {
           participants: sessionData.participants || [],
           participantData: {},
           trialResults: [],
-          // Add AI mode data
           aiMode: sessionData.aiMode || "goodAI",
           csvFilePath: sessionData.csvFilePath || null,
           trialCount: sessionData.trialCount || 0,
@@ -75,6 +74,23 @@ function initializeSessionState(sessionID, mode) {
             sessionData.aiMode || "default"
           } AI mode`
         );
+
+        if (sessionData.csvFilePath) {
+          try {
+            const trialData = await sessionManager.readCsvFile(sessionData.csvFilePath);
+
+            const state = sessionStates.get(sessionID);
+            if (state) {
+              state.trialData = trialData;
+              sessionStates.set(sessionID, state);
+              console.log(
+                `Loaded ${trialData.length} rows of trial data for session ${sessionID}`
+              );
+            }
+          } catch (error) {
+            console.error(`Error loading trial data: ${error.message}`);
+          }
+        }
 
         // Start the trial phase synchronization for this session
         startTrialPhase(sessionID);
@@ -111,6 +127,15 @@ function startTrialPhase(sessionID) {
     `Starting phase ${state.currentPhase} for trial ${state.currentTrial} in session ${sessionID} with duration ${duration}ms`
   );
 
+  let currentTrialData = null;
+  if (
+    state.trialData &&
+    Array.isArray(state.trialData) &&
+    state.trialData.length >= state.currentTrial
+  ) {
+    currentTrialData = state.trialData[state.currentTrial - 1];
+  }
+
   // Send phase start notification to all clients in this session
   broadcastToSession(sessionID, {
     type: "phaseChange",
@@ -122,9 +147,7 @@ function startTrialPhase(sessionID) {
     chatDuration:
       state.currentPhase === PHASES.GROUP_DELIB ? CHAT_DURATION : null,
     aiMode: sessionStates.get(sessionID).aiMode,
-    trialData: sessionStates.get(sessionID).trialData
-      ? sessionStates.get(sessionID).trialData[state.currentTrial - 1]
-      : null,
+    trialData: currentTrialData,
   });
 
   // Schedule the next phase transition

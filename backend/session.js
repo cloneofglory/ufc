@@ -706,3 +706,5 @@ async function createSoloSession(clientID) {
 }
 
 module.exports = sessionManager;
+module.exports.readCsvFile = readCsvFile;
+module.exports.findTrialSetCsv = findTrialSetCsv;

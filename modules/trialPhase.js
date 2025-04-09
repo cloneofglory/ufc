@@ -52,6 +52,8 @@ const trialPhase = (function () {
         // Clear any existing timers when phase changes
         clearAllTimers();
 
+        window.aiMode = data.aiMode || null;
+
         // Update trial state from server
         currentTrial = data.trial;
         totalTrials = data.totalTrials;
@@ -59,6 +61,14 @@ const trialPhase = (function () {
         phaseStartTime = data.startTime;
         phaseDuration = data.duration;
         chatDuration = data.chatDuration;
+
+        if (data.trialData) {
+          if (!window.currentTrialData) {
+            window.currentTrialData = [];
+          }
+          window.currentTrialData[currentTrial - 1] = data.trialData;
+          console.log("Received trial data for trial", currentTrial);
+        }
 
         // Reset phase-specific confirmation flags
         resetPhaseFlags(data.phase);
@@ -96,6 +106,8 @@ const trialPhase = (function () {
       } else if (data.type === "rejoinSession") {
         // Clear any existing timers when rejoining
         clearAllTimers();
+
+        window.aiMode = data.aiMode || null;
 
         // Rejoin an active session
         sessionID = data.sessionID;
@@ -583,16 +595,22 @@ const trialPhase = (function () {
     const contentEl = initialScreen.querySelector("#initial-content");
     const wallet = utilities.getWallet();
     contentEl.innerHTML = `
-      <p><strong>Wallet:</strong> ${wallet}</p>
-      ${generateFighterTableHTML()}
-      <p><strong>AI Prediction:</strong> ${currentFightData.aiPrediction}</p>
-      <p><strong>Rationale:</strong> ${currentFightData.aiRationale}</p>
-      <div style="margin-top: 20px;">
-        <label>Initial Wager (0-4):</label>
-        <input type="range" min="0" max="4" step="1" value="2" id="initial-wager-range" />
-      </div>
-      <div id="solo-initial-countdown" style="margin-top:10px;"></div>
-    `;
+  <p><strong>Wallet:</strong> ${wallet}</p>
+  ${generateFighterTableHTML()}
+  ${
+    window.aiMode !== "neutralAI"
+      ? `
+  <p><strong>AI Prediction:</strong> ${currentFightData.aiPrediction}</p>
+  <p><strong>Rationale:</strong> ${currentFightData.aiRationale}</p>
+  `
+      : ""
+  }
+  <div style="margin-top: 20px;">
+    <label>Initial Wager (0-4):</label>
+    <input type="range" min="0" max="4" step="1" value="2" id="initial-wager-range" />
+  </div>
+  <div id="solo-initial-countdown" style="margin-top:10px;"></div>
+`;
 
     // Add event listener for wager slider
     const wagerSlider = contentEl.querySelector("#initial-wager-range");
@@ -617,11 +635,17 @@ const trialPhase = (function () {
     const fightInfoEl = groupDelibScreen.querySelector("#group-fight-info");
     const wallet = utilities.getWallet();
     fightInfoEl.innerHTML = `
-      <p><strong>Wallet:</strong> ${wallet}</p>
-      ${generateFighterTableHTML()}
-      <p><strong>AI Prediction:</strong> ${currentFightData.aiPrediction}</p>
-      <p><strong>Rationale:</strong> ${currentFightData.aiRationale}</p>
-    `;
+    <p><strong>Wallet:</strong> ${wallet}</p>
+    ${generateFighterTableHTML()}
+    ${
+      window.aiMode !== "neutralAI"
+        ? `
+    <p><strong>AI Prediction:</strong> ${currentFightData.aiPrediction}</p>
+    <p><strong>Rationale:</strong> ${currentFightData.aiRationale}</p>
+    `
+        : ""
+    }
+  `;
 
     // Reset the chat UI
     groupDelibScreen.querySelector("#chat-messages").innerHTML = "";
@@ -649,16 +673,22 @@ const trialPhase = (function () {
     );
     const wallet = utilities.getWallet();
     contentEl.innerHTML = `
-      <p><strong>Wallet:</strong> ${wallet}</p>
-      ${generateFighterTableHTML()}
-      <p><strong>AI Prediction:</strong> ${currentFightData.aiPrediction}</p>
-      <p><strong>Rationale:</strong> ${currentFightData.aiRationale}</p>
-      <div style="margin-top: 20px;">
-        <label>Stake (0-4):</label>
-        <input type="range" min="0" max="4" step="1" value="${initialWager}" id="final-wager-range" />
-      </div>
-      <div id="final-decision-countdown" style="margin-top:10px;"></div>
-    `;
+  <p><strong>Wallet:</strong> ${wallet}</p>
+  ${generateFighterTableHTML()}
+  ${
+    window.aiMode !== "neutralAI"
+      ? `
+  <p><strong>AI Prediction:</strong> ${currentFightData.aiPrediction}</p>
+  <p><strong>Rationale:</strong> ${currentFightData.aiRationale}</p>
+  `
+      : ""
+  }
+  <div style="margin-top: 20px;">
+    <label>Stake (0-4):</label>
+    <input type="range" min="0" max="4" step="1" value="${initialWager}" id="final-wager-range" />
+  </div>
+  <div id="final-decision-countdown" style="margin-top:10px;"></div>
+`;
 
     // Set finalWager to match initialWager initially
     finalWager = initialWager;
@@ -750,7 +780,46 @@ const trialPhase = (function () {
   }
 
   function generateFighterTableHTML() {
+    // return `
+    //   <table class="fighter-table">
+    //     <tr>
+    //       <th></th>
+    //       <th>Fighter A</th>
+    //       <th>Fighter B</th>
+    //     </tr>
+    //     <tr>
+    //       <td>Career Wins</td>
+    //       <td>${currentFightData.fighterA.wins}</td>
+    //       <td>${currentFightData.fighterB.wins}</td>
+    //     </tr>
+    //     <tr>
+    //       <td>Career Losses</td>
+    //       <td>${currentFightData.fighterA.losses}</td>
+    //       <td>${currentFightData.fighterB.losses}</td>
+    //     </tr>
+    //     <tr>
+    //       <td>Age</td>
+    //       <td>${currentFightData.fighterA.age} years</td>
+    //       <td>${currentFightData.fighterB.age} years</td>
+    //     </tr>
+    //     <tr>
+    //       <td>Height</td>
+    //       <td>${currentFightData.fighterA.height}</td>
+    //       <td>${currentFightData.fighterB.height}</td>
+    //     </tr>
+    //     <tr>
+    //       <td>Strikes Landed/Min</td>
+    //       <td>${currentFightData.fighterA.strikelaM}</td>
+    //       <td>${currentFightData.fighterB.strikelaM}</td>
+    //     </tr>
+    //     <tr>
+    //       <td>Strike Accuracy</td>
+    //       <td>${currentFightData.fighterA.sigSacc}</td>
+    //       <td>${currentFightData.fighterB.sigSacc}</td>
+    //     </tr>
+    //   </table>
     return `
+    <div class="fighter-table-container">
       <table class="fighter-table">
         <tr>
           <th></th>
@@ -787,31 +856,80 @@ const trialPhase = (function () {
           <td>${currentFightData.fighterA.sigSacc}</td>
           <td>${currentFightData.fighterB.sigSacc}</td>
         </tr>
+        <tr>
+          <td>Strike Defense</td>
+          <td>${currentFightData.fighterA.strDef || "N/A"}</td>
+          <td>${currentFightData.fighterB.strDef || "N/A"}</td>
+        </tr>
+        <tr>
+          <td>Takedown Defense</td>
+          <td>${currentFightData.fighterA.tdDef || "N/A"}</td>
+          <td>${currentFightData.fighterB.tdDef || "N/A"}</td>
+        </tr>
+        <tr>
+          <td>Strikes Avoided/Min</td>
+          <td>${currentFightData.fighterA.SApM || "N/A"}</td>
+          <td>${currentFightData.fighterB.SApM || "N/A"}</td>
+        </tr>
+        <tr>
+          <td>Takedown Accuracy</td>
+          <td>${currentFightData.fighterA.tdAcc || "N/A"}</td>
+          <td>${currentFightData.fighterB.tdAcc || "N/A"}</td>
+        </tr>
       </table>
+    </div>
     `;
   }
 
   function loadTrialData() {
-    currentFightData = {
-      fighterA: {
-        wins: 8,
-        losses: 2,
-        age: 24.6,
-        height: "5'10\"",
-        strikelaM: "4.5/min",
-        sigSacc: "40%",
-      },
-      fighterB: {
-        wins: 11,
-        losses: 5,
-        age: 27.8,
-        height: "5'11\"",
-        strikelaM: "4.9/min",
-        sigSacc: "50%",
-      },
-      aiPrediction: "Fighter A will win by TKO",
-      aiRationale: "Better takedown defense and younger age.",
-    };
+    if (window.currentTrialData && window.currentTrialData[currentTrial - 1]) {
+      try {
+        const trialDataRow = window.currentTrialData[currentTrial - 1];
+
+        currentFightData = {
+          fighterA: {
+            wins: trialDataRow.r_wins_total || 0,
+            losses: trialDataRow.r_losses_total || 0,
+            age: trialDataRow.r_age || 0,
+            height: trialDataRow.r_height || "N/A",
+            strikelaM: trialDataRow.r_SLpM_total + "/min" || "N/A",
+            sigSacc: trialDataRow.r_sig_str_acc_total + "%" || "N/A",
+            strDef: trialDataRow.r_str_def_total + "%" || "N/A",
+            tdDef: trialDataRow.r_td_def_total + "%" || "N/A",
+            SApM: trialDataRow.r_SApM_total || "N/A",
+            tdAcc: trialDataRow.r_td_acc_total + "%" || "N/A",
+          },
+          fighterB: {
+            wins: trialDataRow.b_wins_total || 0,
+            losses: trialDataRow.b_losses_total || 0,
+            age: trialDataRow.b_age || 0,
+            height: trialDataRow.b_height || "N/A",
+            strikelaM: trialDataRow.b_SLpM_total + "/min" || "N/A",
+            sigSacc: trialDataRow.b_sig_str_acc_total + "%" || "N/A",
+            strDef: trialDataRow.b_str_def_total + "%" || "N/A",
+            tdDef: trialDataRow.b_td_def_total + "%" || "N/A",
+            SApM: trialDataRow.b_SApM_total || "N/A",
+            tdAcc: trialDataRow.b_td_acc_total + "%" || "N/A",
+          },
+          aiPrediction:
+            "Fighter " +
+            (trialDataRow.predicted_winner === "0" ||
+            trialDataRow.predicted_winner === 0
+              ? "A"
+              : "B") +
+            " will win",
+          aiRationale: trialDataRow.rationale_feature,
+          winner: trialDataRow.winner,
+          justification: trialDataRow.justification,
+        };
+
+        console.log("Loaded trial data from server for trial", currentTrial);
+      } catch (error) {
+        console.error("Error parsing server trial data:", error);
+      }
+    } else {
+      console.log("No server trial data available for trial", currentTrial);
+    }
   }
 
   return {
