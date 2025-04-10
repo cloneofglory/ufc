@@ -597,14 +597,13 @@ const trialPhase = (function () {
     contentEl.innerHTML = `
   <p><strong>Wallet:</strong> ${wallet}</p>
   ${generateFighterTableHTML()}
-  ${
-    window.aiMode !== "neutralAI"
-      ? `
   <p><strong>AI Prediction:</strong> ${currentFightData.aiPrediction}</p>
-  <p><strong>Rationale:</strong> ${currentFightData.aiRationale}</p>
+  ${window.aiMode !== "neutralAI"
+        ? `
+  <p><strong>Rationale:</strong> ${currentFightData.justification}</p>
   `
-      : ""
-  }
+        : ""
+      }
   <div style="margin-top: 20px;">
     <label>Initial Wager (0-4):</label>
     <input type="range" min="0" max="4" step="1" value="2" id="initial-wager-range" />
@@ -637,14 +636,13 @@ const trialPhase = (function () {
     fightInfoEl.innerHTML = `
     <p><strong>Wallet:</strong> ${wallet}</p>
     ${generateFighterTableHTML()}
-    ${
-      window.aiMode !== "neutralAI"
-        ? `
     <p><strong>AI Prediction:</strong> ${currentFightData.aiPrediction}</p>
-    <p><strong>Rationale:</strong> ${currentFightData.aiRationale}</p>
+    ${window.aiMode !== "neutralAI"
+        ? `
+    <p><strong>Rationale:</strong> ${currentFightData.justification}</p>
     `
         : ""
-    }
+      }
   `;
 
     // Reset the chat UI
@@ -675,14 +673,13 @@ const trialPhase = (function () {
     contentEl.innerHTML = `
   <p><strong>Wallet:</strong> ${wallet}</p>
   ${generateFighterTableHTML()}
-  ${
-    window.aiMode !== "neutralAI"
-      ? `
-  <p><strong>AI Prediction:</strong> ${currentFightData.aiPrediction}</p>
-  <p><strong>Rationale:</strong> ${currentFightData.aiRationale}</p>
+    <p><strong>AI Prediction:</strong> ${currentFightData.aiPrediction}</p>
+  ${window.aiMode !== "neutralAI"
+        ? `
+  <p><strong>Rationale:</strong> ${currentFightData.justification}</p>
   `
-      : ""
-  }
+        : ""
+      }
   <div style="margin-top: 20px;">
     <label>Stake (0-4):</label>
     <input type="range" min="0" max="4" step="1" value="${initialWager}" id="final-wager-range" />
@@ -721,8 +718,7 @@ const trialPhase = (function () {
     let walletAfter = utilities.getWallet();
     const resultContent = resultScreen.querySelector("#result-content");
     resultContent.innerHTML = `
-      <p><strong>Fight Outcome:</strong> ${
-        serverAiCorrect ? "Fighter A wins" : "Fighter B wins"
+      <p><strong>Fight Outcome:</strong> ${serverAiCorrect ? "Fighter A wins" : "Fighter B wins"
       }</p>
       <p>${outcomeText}</p>
       <p>Your new wallet balance is: $${walletAfter}</p>
@@ -780,44 +776,6 @@ const trialPhase = (function () {
   }
 
   function generateFighterTableHTML() {
-    // return `
-    //   <table class="fighter-table">
-    //     <tr>
-    //       <th></th>
-    //       <th>Fighter A</th>
-    //       <th>Fighter B</th>
-    //     </tr>
-    //     <tr>
-    //       <td>Career Wins</td>
-    //       <td>${currentFightData.fighterA.wins}</td>
-    //       <td>${currentFightData.fighterB.wins}</td>
-    //     </tr>
-    //     <tr>
-    //       <td>Career Losses</td>
-    //       <td>${currentFightData.fighterA.losses}</td>
-    //       <td>${currentFightData.fighterB.losses}</td>
-    //     </tr>
-    //     <tr>
-    //       <td>Age</td>
-    //       <td>${currentFightData.fighterA.age} years</td>
-    //       <td>${currentFightData.fighterB.age} years</td>
-    //     </tr>
-    //     <tr>
-    //       <td>Height</td>
-    //       <td>${currentFightData.fighterA.height}</td>
-    //       <td>${currentFightData.fighterB.height}</td>
-    //     </tr>
-    //     <tr>
-    //       <td>Strikes Landed/Min</td>
-    //       <td>${currentFightData.fighterA.strikelaM}</td>
-    //       <td>${currentFightData.fighterB.strikelaM}</td>
-    //     </tr>
-    //     <tr>
-    //       <td>Strike Accuracy</td>
-    //       <td>${currentFightData.fighterA.sigSacc}</td>
-    //       <td>${currentFightData.fighterB.sigSacc}</td>
-    //     </tr>
-    //   </table>
     return `
     <div class="fighter-table-container">
       <table class="fighter-table">
@@ -914,13 +872,13 @@ const trialPhase = (function () {
           aiPrediction:
             "Fighter " +
             (trialDataRow.predicted_winner === "0" ||
-            trialDataRow.predicted_winner === 0
-              ? "A"
-              : "B") +
+              trialDataRow.predicted_winner === 0
+              ? "B"
+              : "A") +
             " will win",
-          aiRationale: trialDataRow.rationale_feature,
+          aiRationale: trialDataRow.rationale_feature || "",
           winner: trialDataRow.winner,
-          justification: trialDataRow.justification,
+          justification: trialDataRow.justification || "",
         };
 
         console.log("Loaded trial data from server for trial", currentTrial);
