@@ -11,16 +11,75 @@ const postTask = (function () {
     postTaskScreen.classList.add("screen");
     postTaskScreen.innerHTML = `
       <h2>Post-Task Survey</h2>
-      <p>Thank you for participating in the UFC Prediction Experiment!</p>
-      <p id="final-wallet">Total Winnings: $0</p>
-      <div class="form-group">
-        <label for="slider-performance">How would you rate your overall performance? (0-100):</label>
-        <input type="range" id="slider-performance" min="0" max="100" step="1" value="50">
+      <p>Thank you for participating in the UFC Prediction Experiment!</p><br/>
+      <p id="final-wallet">Total Winnings: $0</p> <br/>
+
+      <p>Now that you've completed the task, please rate how important you believe each of the following fighter stats actually is in predicting UFC fight outcomes.</p><br/>
+      <p>Use the sliders to assign values between 1 (Not important at all) and 100 (Extremely important).</p><br/>
+      <p>Base your ratings on what you've learned or noticed during the task.</p><br/>
+
+      <div class="feature-sliders">
+        <div class="slider-group">
+          <label>Career Wins (1-100):</label>
+          <input type="range" id="post-slider-wins" min="1" max="100" value="50" />
+          <span class="slider-value">50</span>
+        </div>
+        
+        <div class="slider-group">
+          <label>Career Losses (1-100):</label>
+          <input type="range" id="post-slider-losses" min="1" max="100" value="50" />
+          <span class="slider-value">50</span>
+        </div>
+        
+        <div class="slider-group">
+          <label>Age (1-100):</label>
+          <input type="range" id="post-slider-age" min="1" max="100" value="50" />
+          <span class="slider-value">50</span>
+        </div>
+        
+        <div class="slider-group">
+          <label>Height (1-100):</label>
+          <input type="range" id="post-slider-height" min="1" max="100" value="50" />
+          <span class="slider-value">50</span>
+        </div>
+        
+        <div class="slider-group">
+          <label>Strikes Landed/Minute (1-100):</label>
+          <input type="range" id="post-slider-slpm" min="1" max="100" value="50" />
+          <span class="slider-value">50</span>
+        </div>
+        
+        <div class="slider-group">
+          <label>Strike Accuracy (1-100):</label>
+          <input type="range" id="post-slider-accuracy" min="1" max="100" value="50" />
+          <span class="slider-value">50</span>
+        </div>
+        
+        <div class="slider-group">
+          <label>Strike Defense (1-100):</label>
+          <input type="range" id="post-slider-defense" min="1" max="100" value="50" />
+          <span class="slider-value">50</span>
+        </div>
+        
+        <div class="slider-group">
+          <label>Takedown Defense (1-100):</label>
+          <input type="range" id="post-slider-td-defense" min="1" max="100" value="50" />
+          <span class="slider-value">50</span>
+        </div>
+        
+        <div class="slider-group">
+          <label>Strikes Avoided/Minute (1-100):</label>
+          <input type="range" id="post-slider-sapm" min="1" max="100" value="50" />
+          <span class="slider-value">50</span>
+        </div>
+        
+        <div class="slider-group">
+          <label>Takedown Accuracy (1-100):</label>
+          <input type="range" id="post-slider-td-accuracy" min="1" max="100" value="50" />
+          <span class="slider-value">50</span>
+        </div>
       </div>
-      <div class="form-group">
-        <label for="slider-ai-perf">How would you rate the AI's performance? (0-100):</label>
-        <input type="range" id="slider-ai-perf" min="0" max="100" step="1" value="50">
-      </div>
+
       <button id="btn-finish">Finish</button>
       <div id="posttask-countdown" style="margin-top: 10px;"></div>
       <div id="thank-you-message" style="display: none; text-align: center; margin-top: 20px;">
@@ -30,6 +89,13 @@ const postTask = (function () {
     `;
 
     appContainer.appendChild(postTaskScreen);
+
+    postTaskScreen.querySelectorAll('input[type="range"]').forEach((slider) => {
+      const valueDisplay = slider.nextElementSibling;
+      slider.addEventListener("input", () => {
+        valueDisplay.textContent = slider.value;
+      });
+    });
 
     postTaskScreen
       .querySelector("#btn-finish")
@@ -81,13 +147,34 @@ const postTask = (function () {
   }
 
   function finishPostTask() {
-    // Capture survey responses
-    const performanceVal = postTaskScreen.querySelector(
-      "#slider-performance"
-    ).value;
-    const aiPerfVal = postTaskScreen.querySelector("#slider-ai-perf").value;
-    // Save post-task survey data using your utilities module
-    utilities.savePostTaskData({ performanceVal, aiPerfVal });
+    const postTaskData = {
+      clientID: sessionStorage.getItem("PROLIFIC_PID"),
+      finalWallet: utilities.getWallet(),
+      timestamp: new Date().toISOString(),
+      wins: parseInt(postTaskScreen.querySelector("#post-slider-wins").value),
+      losses: parseInt(
+        postTaskScreen.querySelector("#post-slider-losses").value
+      ),
+      age: parseInt(postTaskScreen.querySelector("#post-slider-age").value),
+      height: parseInt(
+        postTaskScreen.querySelector("#post-slider-height").value
+      ),
+      slpm: parseInt(postTaskScreen.querySelector("#post-slider-slpm").value),
+      accuracy: parseInt(
+        postTaskScreen.querySelector("#post-slider-accuracy").value
+      ),
+      defense: parseInt(
+        postTaskScreen.querySelector("#post-slider-defense").value
+      ),
+      tdDefense: parseInt(
+        postTaskScreen.querySelector("#post-slider-td-defense").value
+      ),
+      sapm: parseInt(postTaskScreen.querySelector("#post-slider-sapm").value),
+      tdAccuracy: parseInt(
+        postTaskScreen.querySelector("#post-slider-td-accuracy").value
+      ),
+    };
+    utilities.savePostTaskData(postTaskData);
 
     // Send the finish session payload
     ws.send(

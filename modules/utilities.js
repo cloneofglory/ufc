@@ -1,5 +1,4 @@
-// modules/utilities.js
-const utilities = (function() {
+const utilities = (function () {
   let wallet = 100;
   let wsInstance = null;
 
@@ -17,34 +16,35 @@ const utilities = (function() {
   }
 
   function savePostTaskData(data) {
-    const clientID = sessionStorage.getItem("PROLIFIC_PID") || "unknown";
     console.log("Post-task data to be saved:", data);
     const payload = {
       event: "postTaskSurvey",
-      data: {
-        clientID: clientID,
-        performanceVal: data.performanceVal,
-        aiPerfVal: data.aiPerfVal,
-        finalWallet: getWallet(),
-        timestamp: new Date().toISOString()
-      }
+      data: data,
     };
     if (wsInstance) {
-      wsInstance.send(JSON.stringify({
-        type: "sendData",
-        payload: payload
-      }));
+      wsInstance.send(
+        JSON.stringify({
+          type: "sendData",
+          payload: payload,
+        })
+      );
     } else {
       console.error("WebSocket instance not set in utilities");
     }
+  }
+
+  function formatFighterNames(text) {
+    if (!text) return "";
+    return text
+      .replace(/Red Fighter/g, "Fighter A")
+      .replace(/Blue Fighter/g, "Fighter B");
   }
 
   return {
     getWallet,
     setWallet,
     savePostTaskData,
-    setWebSocket
+    setWebSocket,
+    formatFighterNames,
   };
 })();
-
-

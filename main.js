@@ -1,17 +1,16 @@
-// main.js
 document.addEventListener("DOMContentLoaded", () => {
-  const ws = new WebSocket('ws://localhost:8080');
+  const ws = new WebSocket("ws://localhost:8080");
 
   ws.onopen = () => {
-    console.log('Connected to WebSocket server');
+    console.log("Connected to WebSocket server");
     const clientID = generateAndStoreClientID();
-    console.log('Using clientID:', clientID);
-    ws.send(JSON.stringify({ type: 'register', clientID }));
+    console.log("Using clientID:", clientID);
+    ws.send(JSON.stringify({ type: "register", clientID }));
 
     preTask.init(ws);
     trialPhase.init(ws);
     postTask.init(ws);
-    chat.init(ws); // Assuming chat uses ws.
+    chat.init(ws);
     utilities.setWebSocket(ws);
 
     preTask.showPreTaskScreen();
@@ -19,7 +18,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   ws.onmessage = (event) => {
     const data = JSON.parse(event.data);
-    console.log('Received message:', data);
+    console.log("Received message:", data);
   };
 
   ws.onerror = (error) => {
@@ -30,13 +29,26 @@ document.addEventListener("DOMContentLoaded", () => {
     console.log("WebSocket connection closed");
   };
 });
-  
-function generateAndStoreClientID() {
-  if (!sessionStorage.getItem("PROLIFIC_PID")) {
-    const dummyID = 'client-' + Date.now() + '-' + Math.floor(Math.random() * 10000);
-    sessionStorage.setItem("PROLIFIC_PID", dummyID);
-    console.log("Generated dummy client ID:", dummyID);
-  }
-  return sessionStorage.getItem("PROLIFIC_PID");
-}
 
+function generateAndStoreClientID() {
+  const urlParams = new URLSearchParams(window.location.search);
+  const prolificId = urlParams.get("PROLIFIC_PID");
+
+  if (prolificId) {
+    console.log("Using Prolific ID from URL:", prolificId);
+    sessionStorage.setItem("PROLIFIC_PID", prolificId);
+    return prolificId;
+  }
+
+  const storedId = sessionStorage.getItem("PROLIFIC_PID");
+  if (storedId) {
+    console.log("Using previously stored client ID:", storedId);
+    return storedId;
+  }
+
+  const fallbackId =
+    "client-" + Date.now() + "-" + Math.floor(Math.random() * 10000);
+  sessionStorage.setItem("PROLIFIC_PID", fallbackId);
+  console.log("Generated fallback client ID:", fallbackId);
+  return fallbackId;
+}
