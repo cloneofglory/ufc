@@ -38,7 +38,7 @@ server.listen(PORT, () => {
 
 // Trial phase constants
 const PHASE_DURATION = 15000; // 15 seconds for each phase
-const CHAT_DURATION = 10000; // 10 seconds
+const CHAT_DURATION = 30000; // 10 seconds
 const PHASES = {
   INITIAL: "initial",
   GROUP_DELIB: "groupDelib",

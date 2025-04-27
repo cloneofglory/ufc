@@ -292,7 +292,7 @@ const trialPhase = (function () {
     // Add message to chat
     const timeUpMessage = document.createElement("div");
     timeUpMessage.className = "system-message";
-    timeUpMessage.textContent = "Chat time is up. Please finalize your wager.";
+    timeUpMessage.textContent = "Chat time is up. Please finalize your Bet.";
     groupDelibScreen.querySelector("#chat-messages").appendChild(timeUpMessage);
 
     // Focus on wager section
@@ -323,7 +323,7 @@ const trialPhase = (function () {
           if (chatInputEnabled && chatDuration !== null) {
             groupCountdownEl.textContent = `Chat time remaining: ${seconds} seconds`;
           } else {
-            groupCountdownEl.textContent = `Wager time remaining: ${seconds} seconds`;
+            groupCountdownEl.textContent = `Bet time remaining: ${seconds} seconds`;
           }
         }
         break;
@@ -407,11 +407,11 @@ const trialPhase = (function () {
         </div>
         <hr>
         <div id="wager-section">
-          <h3>Your Wager</h3>
+          <h3>Your Bet</h3>
           <div id="wager-container" style="display:none; margin-top: 20px;">
-            <label for="group-wager-range">Wager Scale (0-4):</label>
+            <label for="group-wager-range">Bet Scale (0-4):</label>
             <input type="range" id="group-wager-range" min="0" max="4" step="1" value="2">
-            <button id="btn-confirm-group-wager">Confirm Wager</button>
+            <button id="btn-confirm-group-wager">Confirm Bet</button>
           </div>
         </div>
         <div id="confirmed-wagers" style="margin-top:20px;"></div>
@@ -440,7 +440,7 @@ const trialPhase = (function () {
     const confirmedWagersEl =
       groupDelibScreen.querySelector("#confirmed-wagers");
     const wagerEl = document.createElement("p");
-    wagerEl.textContent = `${userLabel} wager: ${wager}`;
+    wagerEl.textContent = `${userLabel} bet: ${wager}`;
     confirmedWagersEl.appendChild(wagerEl);
   }
 
@@ -451,18 +451,6 @@ const trialPhase = (function () {
       chat.sendMessage(message);
       chat.appendMessage("You", message);
       chatInput.value = "";
-
-      // Optionally force wager display earlier if first message is sent
-      if (groupChatMessages.length === 1) {
-        // If this is the first message, consider starting the wager timer
-        // (similar to original behavior where first message could trigger wager display)
-        if (chatTimerId) {
-          clearTimeout(chatTimerId);
-          chatTimerId = setTimeout(() => {
-            disableChatInput();
-          }, Math.min(5000, phaseDuration / 2)); // Shorten time after first message
-        }
-      }
     }
   }
 
