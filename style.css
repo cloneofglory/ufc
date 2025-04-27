@@ -272,3 +272,70 @@ body.modal-open > *:not(.modal-overlay):not(script):not(style) {
   font-size: 1rem;
   cursor: pointer;
 }
+
+.wager-slider-container {
+  width: 100%;
+  margin-bottom: 25px;
+}
+
+#group-wager-range {
+  width: 100%;
+  max-width: 500px;
+}
+
+/* Layout for bet controls and wagers box */
+.bet-controls-container {
+  display: flex;
+  align-items: flex-start;
+  margin-bottom: 30px;
+}
+
+.confirm-bet-area {
+  margin-right: 40px;
+}
+
+/* Style for the confirmed wagers box */
+.confirmed-wagers-box {
+  flex: 0 0 auto;
+  background-color: rgba(255, 255, 255, 0.7);
+  border-radius: 5px;
+  padding: 10px;
+  min-width: 150px;
+  max-width: 300px;
+  max-height: 120px;
+  overflow-y: auto;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+/* Ensure the text in confirmed wagers is black */
+.confirmed-wagers-box p {
+  margin: 5px 0;
+  font-weight: 500;
+  color: #000000;
+}
+
+/* Style for the countdown - positioned independently */
+#group-initial-countdown {
+  display: block;
+  position: relative;
+  clear: both;
+  margin-top: 20px;
+  font-weight: bold;
+  padding: 5px 0;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .bet-controls-container {
+    flex-direction: column;
+  }
+  
+  .confirm-bet-area {
+    margin-right: 0;
+    margin-bottom: 15px;
+  }
+  
+  .confirmed-wagers-box {
+    max-width: 100%;
+  }
+}
