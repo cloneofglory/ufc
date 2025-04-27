@@ -3,7 +3,7 @@ let groupChatMessages = [];
 let initialWager = 2;
 let finalWager = 2;
 let currentTrial = 1;
-let totalTrials = 5; // For testing (use 50 in production)
+let totalTrials = 50; // For testing (use 50 in production)
 let isSolo = false;
 let currentFightData = null;
 let serverAiCorrect = null; // Outcome provided by server
@@ -79,8 +79,8 @@ const trialPhase = (function () {
         }
 
         // Handle phase-specific data (e.g., outcome for result phase)
-        if (data.phase === "result" && data.aiCorrect !== undefined) {
-          serverAiCorrect = data.aiCorrect;
+        if (data.phase === "result" && (data.trialData.winner !== undefined || data.trialData.predicted_winner !== undefined)) {
+          serverAiCorrect = data.trialData.winner === data.trialData.predicted_winner;
           trialDataSaved = false; // Reset for the new result
         }
 
@@ -348,7 +348,7 @@ const trialPhase = (function () {
     initialScreen.innerHTML = `
       <h2>Trial <span id="solo-trial-number">${currentTrial}</span> of ${totalTrials} - Initial Stage</h2>
       <div id="initial-content"></div>
-      <button id="btn-confirm-initial">Confirm Initial Wager</button>
+      <button id="btn-confirm-initial">Confirm Initial Bet</button>
     `;
     appContainer.appendChild(initialScreen);
     initialScreen
@@ -368,7 +368,7 @@ const trialPhase = (function () {
     // Append confirmation message
     const contentEl = initialScreen.querySelector("#initial-content");
     const movingMsgEl = document.createElement("p");
-    movingMsgEl.innerHTML = `<strong>Wager confirmed: ${initialWager}.</strong>`;
+    movingMsgEl.innerHTML = `<strong>Bet confirmed: ${initialWager}.</strong>`;
     contentEl.appendChild(movingMsgEl);
 
     ws.send(
@@ -498,9 +498,9 @@ const trialPhase = (function () {
     finalDecisionScreen = document.createElement("div");
     finalDecisionScreen.classList.add("screen");
     finalDecisionScreen.innerHTML = `
-      <h2>Final Prediction & Stake Confirmation (Trial <span id="trial-number"></span> of ${totalTrials})</h2>
+      <h2>Final Prediction & Bet Confirmation (Trial <span id="trial-number"></span> of ${totalTrials})</h2>
       <div id="final-decision-content"></div>
-      <button id="btn-confirm-decision">Stake</button>
+      <button id="btn-confirm-decision">Final Bet</button>
     `;
     appContainer.appendChild(finalDecisionScreen);
     finalDecisionScreen
@@ -523,7 +523,7 @@ const trialPhase = (function () {
     );
     const movingMsgEl = document.createElement("p");
     movingMsgEl.innerHTML =
-      "<strong>Stake confirmed. Waiting for results...</strong>";
+      "<strong>Bet confirmed. Waiting for results...</strong>";
     contentEl.appendChild(movingMsgEl);
 
     ws.send(
@@ -605,7 +605,7 @@ const trialPhase = (function () {
         : ""
       }
   <div style="margin-top: 20px;">
-    <label>Initial Wager (0-4):</label>
+    <label>Initial Bet (0-4):</label>
     <input type="range" min="0" max="4" step="1" value="2" id="initial-wager-range" />
   </div>
   <div id="solo-initial-countdown" style="margin-top:10px;"></div>
@@ -681,7 +681,7 @@ const trialPhase = (function () {
         : ""
       }
   <div style="margin-top: 20px;">
-    <label>Stake (0-4):</label>
+    <label>Final Bet (0-4):</label>
     <input type="range" min="0" max="4" step="1" value="${initialWager}" id="final-wager-range" />
   </div>
   <div id="final-decision-countdown" style="margin-top:10px;"></div>
@@ -708,7 +708,7 @@ const trialPhase = (function () {
 
     if (serverAiCorrect) {
       let winnings = stakeAmount * 2;
-      utilities.setWallet(walletBefore + winnings);
+      utilities.setWallet((walletBefore - stakeAmount) + winnings);
       outcomeText = `AI was correct! You win $${winnings}.`;
     } else {
       utilities.setWallet(walletBefore - stakeAmount);
@@ -847,26 +847,26 @@ const trialPhase = (function () {
           fighterA: {
             wins: trialDataRow.r_wins_total || 0,
             losses: trialDataRow.r_losses_total || 0,
-            age: trialDataRow.r_age || 0,
+            age: Math.floor(trialDataRow.r_age || 0),
             height: trialDataRow.r_height || "N/A",
             strikelaM: trialDataRow.r_SLpM_total + "/min" || "N/A",
-            sigSacc: trialDataRow.r_sig_str_acc_total + "%" || "N/A",
-            strDef: trialDataRow.r_str_def_total + "%" || "N/A",
-            tdDef: trialDataRow.r_td_def_total + "%" || "N/A",
-            SApM: trialDataRow.r_SApM_total || "N/A",
-            tdAcc: trialDataRow.r_td_acc_total + "%" || "N/A",
+            sigSacc: (trialDataRow.r_sig_str_acc_total * 100).toFixed(0) + "%" || "N/A",
+            strDef: (trialDataRow.r_str_def_total * 100).toFixed(0) + "%" || "N/A",
+            tdDef: (trialDataRow.r_td_def_total * 100).toFixed(0) + "%" || "N/A",
+            SApM: trialDataRow.r_SApM_total + "/min" || "N/A",
+            tdAcc: (trialDataRow.r_td_acc_total * 100).toFixed(0) + "%" || "N/A",
           },
           fighterB: {
             wins: trialDataRow.b_wins_total || 0,
             losses: trialDataRow.b_losses_total || 0,
-            age: trialDataRow.b_age || 0,
+            age: Math.floor(trialDataRow.b_age || 0),
             height: trialDataRow.b_height || "N/A",
             strikelaM: trialDataRow.b_SLpM_total + "/min" || "N/A",
-            sigSacc: trialDataRow.b_sig_str_acc_total + "%" || "N/A",
-            strDef: trialDataRow.b_str_def_total + "%" || "N/A",
-            tdDef: trialDataRow.b_td_def_total + "%" || "N/A",
-            SApM: trialDataRow.b_SApM_total || "N/A",
-            tdAcc: trialDataRow.b_td_acc_total + "%" || "N/A",
+            sigSacc: (trialDataRow.b_sig_str_acc_total * 100).toFixed(0) + "%" || "N/A",
+            strDef: (trialDataRow.b_str_def_total * 100).toFixed(0) + "%" || "N/A",
+            tdDef: (trialDataRow.b_td_def_total * 100).toFixed(0) + "%" || "N/A",
+            SApM: trialDataRow.b_SApM_total + "/min" || "N/A",
+            tdAcc: (trialDataRow.b_td_acc_total * 100).toFixed(0) + "%" || "N/A",
           },
           aiPrediction:
             "Fighter " +

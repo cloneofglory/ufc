@@ -2,15 +2,18 @@
   "name": "ufc_prediction_task",
   "version": "1.0.0",
   "description": "",
-  "main": "main.js",
+  "main": "backend/server.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node backend/server.js"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "dependencies": {
     "csv-parser": "^3.2.0",
+    "dotenv": "^16.5.0",
+    "express": "^5.1.0",
     "firebase-admin": "^13.1.0",
     "ws": "^8.18.1"
   }

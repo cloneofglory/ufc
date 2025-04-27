@@ -266,3 +266,9 @@ body.modal-open > *:not(.modal-overlay):not(script):not(style) {
   font-weight: bold;
   cursor: pointer;
 }
+
+#researcher-downloads button {
+  padding: 0.5em 1em;
+  font-size: 1rem;
+  cursor: pointer;
+}

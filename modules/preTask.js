@@ -21,76 +21,74 @@ const preTask = (function () {
       
       <p>Before we begin the main task, we'd like to understand how important you think each of the following fighter stats is when predicting who will win a UFC fight.</p> <br/>
       <p>Use the slider to assign a value between 1 (Not important at all) and 100 (Extremely important) for each feature based on your personal judgment.</p> <br/>
-      <p>Please base your ratings on your current intuition or knowledge there are no right or wrong answers.</p>
-      <br/>
-
+      <p>Please base your ratings on your current intuition or knowledge—there are no right or wrong answers.</p><br/>
+  
       <div class="feature-sliders">
         <div class="slider-group">
-          <label>Career Wins (1-100):</label>
+          <label>Career Wins (Total number of fights the fighter has won)</label>
           <input type="range" id="slider-wins" min="1" max="100" value="50" />
           <span class="slider-value">50</span>
         </div>
         
         <div class="slider-group">
-          <label>Career Losses (1-100):</label>
+          <label>Career Losses (Total number of fights the fighter has lost)</label>
           <input type="range" id="slider-losses" min="1" max="100" value="50" />
           <span class="slider-value">50</span>
         </div>
         
         <div class="slider-group">
-          <label>Age (1-100):</label>
+          <label>Age (The fighter’s current age in years)</label>
           <input type="range" id="slider-age" min="1" max="100" value="50" />
           <span class="slider-value">50</span>
         </div>
         
         <div class="slider-group">
-          <label>Height (1-100):</label>
+          <label>Height (The fighter’s height, which can affect reach and leverage)</label>
           <input type="range" id="slider-height" min="1" max="100" value="50" />
           <span class="slider-value">50</span>
         </div>
         
         <div class="slider-group">
-          <label>Strikes Landed/Minute (1-100):</label>
+          <label>Strikes Landed/Minute (Average number of strikes the fighter lands per minute)</label>
           <input type="range" id="slider-slpm" min="1" max="100" value="50" />
           <span class="slider-value">50</span>
         </div>
         
         <div class="slider-group">
-          <label>Strike Accuracy (1-100):</label>
+          <label>Strike Accuracy (Percentage of strikes that land successfully)</label>
           <input type="range" id="slider-accuracy" min="1" max="100" value="50" />
           <span class="slider-value">50</span>
         </div>
         
         <div class="slider-group">
-          <label>Strike Defense (1-100):</label>
+          <label>Strike Defense (Percentage of opponent strikes the fighter avoids)</label>
           <input type="range" id="slider-defense" min="1" max="100" value="50" />
           <span class="slider-value">50</span>
         </div>
         
         <div class="slider-group">
-          <label>Takedown Defense (1-100):</label>
+          <label>Takedown Defense (Percentage of opponent takedown attempts successfully defended)</label>
           <input type="range" id="slider-td-defense" min="1" max="100" value="50" />
           <span class="slider-value">50</span>
         </div>
         
         <div class="slider-group">
-          <label>Strikes Avoided/Minute (1-100):</label>
+          <label>Strikes Avoided/Minute (Average number of strikes the fighter avoids per minute)</label>
           <input type="range" id="slider-sapm" min="1" max="100" value="50" />
           <span class="slider-value">50</span>
         </div>
         
         <div class="slider-group">
-          <label>Takedown Accuracy (1-100):</label>
+          <label>Takedown Accuracy (Percentage of takedown attempts that are successful)</label>
           <input type="range" id="slider-td-accuracy" min="1" max="100" value="50" />
           <span class="slider-value">50</span>
         </div>
       </div>
-
-      
+  
       <button id="btn-start-waiting">Submit Survey & Enter Waiting Room</button>
     `;
     appContainer.appendChild(preTaskScreen);
-
+ 
     waitingRoomScreen = document.createElement("div");
     waitingRoomScreen.classList.add("screen");
     waitingRoomScreen.innerHTML = `
@@ -266,8 +264,7 @@ const preTask = (function () {
             <li><strong>Risks & Benefits:</strong> There are no known risks beyond those of everyday computer use. While there are no direct personal benefits, your participation will contribute to research on human-AI interaction and group dynamics.</li>
             <li><strong>Alternatives:</strong> There are no alternative procedures available. The only alternative is not to participate in this study.</li>
             <li><strong>Confidentiality:</strong> The data you provide may be collected and used by Prolific as per its privacy agreement. All data collected will be kept strictly confidential and stored securely. No personal identifying information will be collected.</li>
-            <li><strong>Age Requirement:</strong> You must be between 18 to 60 years old to participate.</li>
-            <li><strong>US Citizenship Requirement:</strong> You must be a US Citizen and resident of the US to participate.</li>
+            <li><strong>Age Requirement:</strong> You must be above 18 years old to participate.</li>
             <li><strong>IRB Approval:</strong> This study has been reviewed and approved by the Institutional Review Board (IRB) atUniversity of California, Irvine.</li>
           </ul>
           

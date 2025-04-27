@@ -3,6 +3,8 @@ const path = require("path");
 const csv = require("csv-parser");
 
 const { admin, firestore } = require("./firebaseConfig");
+const { shuffleAndPersist } = require("./shuffleHelper");
+
 const WAITING_DURATION = 30000; // 30 seconds
 
 const AI_MODES = ["goodAI", "badAI", "neutralAI"];
@@ -82,6 +84,7 @@ async function findTrialSetCsv(directoryPath) {
 const sessionManager = {
   updateCallback: null,
   clientSessions: new Map(), // Map to track which session each client belongs to
+  sessionTrials: new Map(),     // ← NEW: holds randomized trials per session
   lastSoloAiMode: null,
   lastGroupAiMode: null,
 
@@ -130,6 +133,15 @@ const sessionManager = {
         // If the session is now full (3 participants), update to group mode.
         if (sessionData.participants.length === 3) {
           const aiModeData = await this.determineAiMode("group");
+
+          // Shuffle & persist trial order, keep shuffled data in memory
+          const randomized = await shuffleAndPersist(
+            waitingSessionDoc.ref,
+            aiModeData.trialData
+          );
+          this.sessionTrials.set(waitingSessionDoc.id, randomized);
+
+
           await waitingSessionDoc.ref.update({
             status: "running",
             mode: "group",
@@ -586,6 +598,14 @@ async function createNewWaitingSession(clientID) {
         // Improved logic to handle different participant counts
         if (data.participants.length === 1) {
           const aiModeData = await sessionManager.determineAiMode("solo");
+
+          // Shuffle & persist for this solo session
+          const randomized = await shuffleAndPersist(
+            sessionRef,
+            aiModeData.trialData
+          );
+          sessionManager.sessionTrials.set(sessionRef.id, randomized);
+
           // Just one participant - start solo mode
           await sessionRef.update({
             status: "running",
@@ -631,6 +651,13 @@ async function createNewWaitingSession(clientID) {
           });
         } else if (data.participants.length >= 3) {
           const aiModeData = await sessionManager.determineAiMode("group");
+          // Shuffle & persist for this group session
+          const randomized = await shuffleAndPersist(
+            sessionRef,
+            aiModeData.trialData
+          );
+          sessionManager.sessionTrials.set(sessionRef.id, randomized);
+
           // 3 or more participants - make first 3 a group, rest go solo
           const allParticipants = [...data.participants];
           const groupParticipants = allParticipants.slice(0, 3);
@@ -699,6 +726,14 @@ async function createSoloSession(clientID) {
     trialCount: aiModeData.trialData.length,
   };
   await sessionRef.set(sessionData);
+
+  // Shuffle & persist trial order, store randomized trials
+  const randomized = await shuffleAndPersist(
+    sessionRef,
+    aiModeData.trialData
+  );
+  sessionManager.sessionTrials.set(sessionRef.id, randomized);
+
   console.log(
     `Created solo session ${sessionRef.id} for ${clientID} using ${aiModeData.aiMode}`
   );

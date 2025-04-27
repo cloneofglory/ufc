@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Experiment Data Download</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <section style="margin: 2em auto; max-width: 600px; text-align: center;">
+    <h1>Experiment Data Download</h1>
+    <p>This page is for researchers to download the aggregated experiment data.</p>
+    <div style="margin-top: 1em; display: inline-flex; gap: 1em;">
+      <button id="soloDownload">Download All Solo CSV</button>
+      <button id="groupDownload">Download All Group CSV</button>
+    </div>
+  </section>
+
+  <script>
+    // Determine API base URL based on hostname
+    const isLocal = window.location.hostname === 'localhost' 
+                 || window.location.hostname === '127.0.0.1';
+    const apiBase = isLocal
+      ? 'http://localhost:8080'
+      : 'https://api.mental-model-task.xyz';
+
+    // Wire up the buttons
+    document.getElementById('soloDownload').onclick = () => {
+      window.location.href = `${apiBase}/exportCsv?mode=solo`;
+    };
+    document.getElementById('groupDownload').onclick = () => {
+      window.location.href = `${apiBase}/exportCsv?mode=group`;
+    };
+  </script>
+</body>
+</html>
+

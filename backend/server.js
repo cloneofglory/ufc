@@ -1,9 +1,40 @@
+const express = require("express");
+const http = require("http");
 const WebSocket = require("ws");
 const sessionManager = require("./session");
 const { firestore } = require("./firebaseConfig");
+const path = require('path');
 
-const wss = new WebSocket.Server({ port: 8080 });
+const app = express();
+
+const exportCsvRouter = require('./routes/exportCsv');
+
+// Mount the CSV route (no auth, link only protects it)
+app.use('/exportCsv', exportCsvRouter);
+
+app.get('/health', (req, res) => {
+  res.status(200).send('ok');
+});
+
+// Serve the researcher download page
+app.get('/downloads', (req, res) => {
+  res.sendFile(path.join(__dirname, '../downloads.html'));
+});
+
+
+const server = http.createServer(app);
+
+// const wss = new WebSocket.Server({ port: process.env.PORT || 8080 });
+const wss = new WebSocket.Server({ server });
+
 let clients = new Map();
+
+const PORT = process.env.PORT || 8080;
+
+server.listen(PORT, () => {
+  console.log(`Server running on PORT http ${PORT}`);
+  console.log(`Websocket server running on PORT wss ${PORT}`);
+});
 
 // Trial phase constants
 const PHASE_DURATION = 15000; // 15 seconds for each phase
@@ -57,7 +88,7 @@ function initializeSessionState(sessionID, mode) {
         // Initialize session state with AI mode data
         sessionStates.set(sessionID, {
           currentTrial: 1,
-          totalTrials: 5, // For testing (use 50 in production)
+          totalTrials: 50, // For testing (use 50 in production)
           currentPhase: mode === "group" ? PHASES.GROUP_DELIB : PHASES.INITIAL,
           phaseStartTime: Date.now(),
           mode: mode,
@@ -77,8 +108,27 @@ function initializeSessionState(sessionID, mode) {
 
         if (sessionData.csvFilePath) {
           try {
-            const trialData = await sessionManager.readCsvFile(sessionData.csvFilePath);
+            // Read the raw csv
+            const rawData = await sessionManager.readCsvFile(sessionData.csvFilePath);
 
+            //Apply trialOrder if present
+            let trialData;
+            if (Array.isArray(sessionData.trialOrder) &&
+              sessionData.trialOrder.length === rawData.length) {
+              trialData = sessionData.trialOrder.map(idx => rawData[idx]);
+              console.log(
+                `Applied trialOrder for session ${sessionID}: [${sessionData.trialOrder.join(',')}]`
+              );
+            } else {
+              trialData = rawData;
+              if (sessionData.trialOrder) {
+                console.warn(
+                  `Invalid trialOrder for session ${sessionID}, falling back to raw order.`
+                );
+              }
+            }
+
+            // Store into session state
             const state = sessionStates.get(sessionID);
             if (state) {
               state.trialData = trialData;
@@ -100,7 +150,7 @@ function initializeSessionState(sessionID, mode) {
       // Fallback initialization
       sessionStates.set(sessionID, {
         currentTrial: 1,
-        totalTrials: 5,
+        totalTrials: 50,
         currentPhase: mode === "group" ? PHASES.GROUP_DELIB : PHASES.INITIAL,
         phaseStartTime: Date.now(),
         mode: mode,
@@ -385,5 +435,3 @@ wss.on("connection", (ws) => {
     broadcastParticipantCount();
   });
 });
-
-console.log("WebSocket server is running on ws://localhost:8080");
