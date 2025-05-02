@@ -52,6 +52,11 @@ button {
 button:hover {
   background: #e03e00;
 }
+button:disabled {
+    background: #cccccc;
+    cursor: not-allowed;
+}
+
 
 /* Form elements */
 label {
@@ -77,6 +82,14 @@ label {
   color: #ffcc00;
   margin-right: 6px;
 }
+.system-message {
+    font-style: italic;
+    color: #aaa;
+    margin-top: 5px;
+    margin-bottom: 5px;
+    text-align: center;
+}
+
 
 /* Wager Section */
 #wager-container,
@@ -88,6 +101,8 @@ label {
 }
 input[type="range"] {
   width: 100%;
+  max-width: 400px; 
+  cursor: pointer;
 }
 
 /* Fighter Table Styling */
@@ -273,9 +288,15 @@ body.modal-open > *:not(.modal-overlay):not(script):not(style) {
   cursor: pointer;
 }
 
+#wager-section, #chat-section {
+  margin-top: 20px;
+  padding-top: 15px;
+  border-top: 1px solid #555; 
+}
+
 .wager-slider-container {
   width: 100%;
-  margin-bottom: 25px;
+  margin-bottom: 15px;
 }
 
 #group-wager-range {
@@ -283,59 +304,164 @@ body.modal-open > *:not(.modal-overlay):not(script):not(style) {
   max-width: 500px;
 }
 
-/* Layout for bet controls and wagers box */
-.bet-controls-container {
-  display: flex;
-  align-items: flex-start;
-  margin-bottom: 30px;
-}
-
 .confirm-bet-area {
-  margin-right: 40px;
+  margin-top: 10px;
+  margin-bottom: 20px;
 }
 
-/* Style for the confirmed wagers box */
-.confirmed-wagers-box {
-  flex: 0 0 auto;
-  background-color: rgba(255, 255, 255, 0.7);
-  border-radius: 5px;
+.confirmed-wagers-display {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  width: 100%;
+  margin-top: 15px;
+  margin-bottom: 20px;
   padding: 10px;
-  min-width: 150px;
-  max-width: 300px;
-  max-height: 120px;
-  overflow-y: auto;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  background-color: rgba(0, 0, 0, 0.2);
+  border: 1px solid #ffcc00;
+  border-radius: 5px;
+  min-height: 100px;
 }
 
-/* Ensure the text in confirmed wagers is black */
-.confirmed-wagers-box p {
-  margin: 5px 0;
-  font-weight: 500;
-  color: #000000;
+.wagers-title {
+  text-align: center;
+  margin-bottom: 10px;
+  color: #ffcc00;
 }
 
-/* Style for the countdown - positioned independently */
-#group-initial-countdown {
-  display: block;
-  position: relative;
-  clear: both;
+.wagers-container {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-around;
+  align-items: center;
+  width: 100%;
+  min-height: 60px;
+}
+
+.wager-column {
+  flex: 1; 
+  padding: 10px;
+  text-align: center;
+  border-left: 1px solid #555; 
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+}
+
+.wager-column:first-child {
+  border-left: none; 
+}
+
+.wager-participant-id {
+  font-size: 0.9em;
+  color: #ccc; 
+  margin-bottom: 5px;
+  font-weight: normal;
+}
+
+.wager-value {
+  font-size: 1.2em;
+  font-weight: bold;
+  color: #ffffff;
+}
+
+.wager-column.my-wager {
+  background-color: rgba(255, 204, 0, 0.3); 
+  border-radius: 4px;
+}
+
+.wager-column.my-wager .wager-participant-id {
+  color: #ffcc00; 
+  font-weight: bold;
+}
+.wager-column.my-wager .wager-value {
+  color: #ffcc00; 
+}
+
+.waiting-message {
+  color: #aaa;
+  width: 100%;
+  text-align: center;
+  font-size: 1em;
+  padding: 15px;
+  margin: 0;
+}
+
+#group-countdown,
+#solo-initial-countdown,
+#final-decision-countdown,
+#result-countdown {
   margin-top: 20px;
   font-weight: bold;
+  text-align: center;
   padding: 5px 0;
+  color: #ffcc00; 
 }
 
-/* Responsive adjustments */
+.chat-input {
+  display: flex;
+  margin-top: 10px;
+}
+#chat-input-text {
+  flex-grow: 1;
+  padding: 8px;
+  border: 1px solid #ccc;
+  border-radius: 4px 0 0 4px;
+  background-color: #333;
+  color: #fff;
+}
+#chat-input-text:disabled {
+  background-color: #555;
+}
+
+#chat-send-btn {
+  padding: 8px 12px;
+  margin-left: -1px; 
+  border-radius: 0 4px 4px 0;
+  margin-top: 0;
+}
+
+#survey-name {
+  max-width: 400px;
+  padding: 12px 15px;
+  font-size: 16px;
+  border: 2px solid rgba(255, 204, 0, 0.4);
+  border-radius: 8px;
+  background-color: rgba(0, 0, 0, 0.3);
+  color: #fff;
+  margin: 10px 0;
+  transition: all 0.3s ease;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+#survey-name:hover {
+  border-color: rgba(255, 204, 0, 0.6);
+}
+
+#survey-name:focus {
+  outline: none;
+  border-color: #ffcc00;
+  box-shadow: 0 0 8px rgba(255, 204, 0, 0.5);
+  background-color: rgba(0, 0, 0, 0.4);
+}
+
+#survey-name::placeholder {
+  color: rgba(255, 255, 255, 0.6);
+}
+
 @media (max-width: 768px) {
-  .bet-controls-container {
-    flex-direction: column;
+  .wagers-container {
+    flex-direction: column; 
+    align-items: center;
   }
-  
-  .confirm-bet-area {
-    margin-right: 0;
-    margin-bottom: 15px;
+  .wager-column {
+    border-left: none;
+    border-bottom: 1px solid #555;
+    width: 80%; 
+    margin-bottom: 5px; 
   }
-  
-  .confirmed-wagers-box {
-    max-width: 100%;
+  .wager-column:last-child {
+    border-bottom: none;
   }
 }

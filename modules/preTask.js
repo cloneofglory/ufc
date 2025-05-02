@@ -118,15 +118,19 @@ const preTask = (function () {
         console.error("Invalid JSON received:", event.data);
         return;
       }
-      if (data.type === "sessionStarted") {
-        console.log("Session started:", data);
-        sessionStorage.setItem("sessionID", data.sessionID);
-        sessionInfo = data;
-        // Once we have a sessionStarted (with sessionID), send the pre-task data.
-        sendPreTaskSurveyData();
-        if (data.mode === "waiting") {
-          // Show waiting room only if session is in waiting mode
-          startWaitingRoom(data.waitingEndTime);
+      
+      if (data.type === "sessionStarted" || 
+          (data.type === "sessionUpdate" && data.status === "waiting")) {
+        console.log("Session started/waiting:", data);
+        if (data.sessionID) {
+          sessionStorage.setItem("sessionID", data.sessionID);
+          sessionInfo = data;
+          sendPreTaskSurveyData();
+        }
+        
+        if (data.mode === "waiting" || data.status === "waiting") {
+          const waitEndTime = data.waitingEndTime || (Date.now() + 30000);
+          startWaitingRoom(waitEndTime);
         } else {
           // Session is already running (group or solo), hide waiting room
           waitingRoomScreen.style.display = "none";
@@ -222,8 +226,8 @@ const preTask = (function () {
         ? "Proceeding to Group Deliberation..."
         : "Proceeding to Solo Mode...";
     console.log("Routing to", mode, "mode.");
-    trialPhase.setMode(mode === "solo"); // true = solo, false = group
-  }
+    hideAllScreens();
+    waitingRoomScreen.style.display = "block";  }
 
   function hideAllScreens() {
     document.querySelectorAll(".screen").forEach((screen) => {
