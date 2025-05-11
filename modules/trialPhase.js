@@ -25,6 +25,10 @@ let chatInputEnabled = false;
 let countdownIntervalId = null;
 let autoTransitionTimerId = null;
 
+let collectedWagers = {};
+let collectedUserNames = {};
+let expectedParticipants = 3;
+
 const trialPhase = (function () {
   let appContainer;
   let initialScreen, groupDelibScreen, finalDecisionScreen, resultScreen;
@@ -41,6 +45,14 @@ const trialPhase = (function () {
     ws.addEventListener("message", handleServerMessage);
   }
 
+  function getDisplayName(clientID) {
+    const myClientID = sessionStorage.getItem("PROLIFIC_PID");
+    if (clientID === myClientID) {
+      return sessionStorage.getItem("userName") || "You";
+    }
+    return collectedUserNames[clientID] || clientID;
+  }
+
   function handleServerMessage(event) {
     try {
       const data = JSON.parse(event.data);
@@ -55,6 +67,17 @@ const trialPhase = (function () {
         );
       } else if (data.type === "phaseChange") {
         clearAllTimers();
+
+         if (data.trial !== currentTrial && currentTrial !== 0) {
+          initialWager = 2;
+          finalWager = 2;
+        }
+
+        if (!isSolo && data.phase === "groupDelib" && data.subPhase === "wager") {
+          expectedParticipants = 3;
+          collectedWagers = {};
+          collectedUserNames = {};
+        }
 
         window.aiMode = data.aiMode || null;
         sessionID = data.sessionID || sessionID;
@@ -153,12 +176,29 @@ const trialPhase = (function () {
         console.log("All trials completed.");
         postTask.showPostTaskScreen();
       } else if (data.type === "allWagersSubmitted" && !isSolo) {
+        if (data.userNames) {
+          Object.assign(collectedUserNames, data.userNames);
+        }
         displayAllConfirmedWagers(data.wagers);
         const wagersDisplay = groupDelibScreen.querySelector(
           "#confirmed-wagers-display"
         );
         if (wagersDisplay) {
           wagersDisplay.style.display = "flex";
+        }
+      } else if (data.type === "individualWager" && !isSolo) {
+        collectedWagers[data.clientID] = data.wager;
+        if (data.userName) {
+          collectedUserNames[data.clientID] = data.userName;
+        }
+        const wagerCount = Object.keys(collectedWagers).length;
+        updateWaitingMessage(wagerCount, expectedParticipants);
+        if (wagerCount === expectedParticipants) {
+          const wagersContainer = groupDelibScreen.querySelector("#wagers-container");
+          wagersContainer.innerHTML = "";
+          displayAllConfirmedWagers(collectedWagers);
+        } else {
+          updateWaitingMessage(wagerCount, expectedParticipants);
         }
       } else if (data.type === "wagerUpdated") {
         console.log(
@@ -179,6 +219,29 @@ const trialPhase = (function () {
     }
   }
 
+  function updateWaitingMessage(received, total) {
+    const wagersContainer = groupDelibScreen?.querySelector("#wagers-container");
+    if (!wagersContainer) return;
+    
+    let waitingMsg = wagersContainer.querySelector(".waiting-message");
+    
+    if (!waitingMsg || !waitingMsg.classList.contains("persistent-waiting")) {
+      if (!waitingMsg) {
+        waitingMsg = document.createElement("div");
+        waitingMsg.className = "waiting-message";
+        wagersContainer.appendChild(waitingMsg);
+      }
+      waitingMsg.textContent = `Waiting for bets... (${received}/${total} received)`;
+    } else {
+      waitingMsg.textContent = `Your bet confirmed. Waiting for others... (${received}/${total} received)`;
+    }
+    
+    const wagersDisplay = groupDelibScreen.querySelector("#confirmed-wagers-display");
+    if (wagersDisplay) {
+      wagersDisplay.style.display = "flex";
+    }
+  }
+
   function resetPhaseFlags() {
     soloInitialConfirmed = currentPhase !== "initial";
     isGroupWagerConfirmed = !(
@@ -192,6 +255,12 @@ const trialPhase = (function () {
     if (currentPhase === "groupDelib" && currentSubPhase === "chat") {
       groupChatMessages = [];
     }
+    
+    if (currentPhase === "groupDelib" && currentSubPhase === "wager") {
+      collectedWagers = {};
+      collectedUserNames = {};
+    }
+    
   }
 
   function clearAllTimers() {
@@ -265,7 +334,9 @@ const trialPhase = (function () {
       if (currentSubPhase === "wager") {
         wagerSection.style.display = "block";
         chatSection.style.display = "none";
-        if (confirmedWagersDisplay.querySelector(".wager-column")) {
+        const hasContent = confirmedWagersDisplay.querySelector(".wager-column") || 
+                          confirmedWagersDisplay.querySelector(".waiting-message");
+        if (hasContent || isGroupWagerConfirmed) {
           confirmedWagersDisplay.style.display = "flex";
         } else {
           confirmedWagersDisplay.style.display = "none";
@@ -345,6 +416,13 @@ const trialPhase = (function () {
     confirmButton.disabled = true;
     confirmButton.textContent = "Bet Confirmed";
 
+    const contentEl = initialScreen.querySelector("#initial-content");
+    const movingMsgEl = document.createElement("p");
+    movingMsgEl.innerHTML = `<strong>Bet confirmed: ${initialWager}.</strong>`;
+    movingMsgEl.style.marginTop = "15px";
+    movingMsgEl.style.color = "#00ff00";
+    contentEl.appendChild(movingMsgEl);
+
     console.log(`Solo Initial Bet Confirmed: ${initialWager}`);
 
     ws.send(
@@ -379,7 +457,7 @@ const trialPhase = (function () {
         <div id="wager-section" style="display: none;">
           <h3>Your Bet</h3>
           <div class="wager-slider-container">
-            <label for="group-wager-range">Bet Scale (0-4):</label>
+            <label for="group-wager-range">Bet Scale (0-4): <span id="group-wager-value">2</span></label>
             <input type="range" id="group-wager-range" min="0" max="4" step="1" value="2">
           </div>
           <div class="confirm-bet-area">
@@ -389,7 +467,7 @@ const trialPhase = (function () {
 
          <!-- Display Area for Confirmed Wagers -->
          <div id="confirmed-wagers-display" class="confirmed-wagers-display" style="display: none;">
-             <h3 class="wagers-title">Bet Results</h3>
+             <h3 class="wagers-title">Initial Bets</h3>
              <div id="wagers-container" class="wagers-container">
                 <!-- Wager columns will be added here by JS -->
                 <p style="color: #aaa; width: 100%; text-align: center;">Waiting for all bets...</p> <!-- Placeholder -->
@@ -415,6 +493,7 @@ const trialPhase = (function () {
       .addEventListener("input", (e) => {
         if (!isGroupWagerConfirmed) {
           initialWager = parseInt(e.target.value, 10);
+          document.getElementById("group-wager-value").textContent = initialWager;
         }
       });
     groupDelibScreen
@@ -466,7 +545,8 @@ const trialPhase = (function () {
 
       const idElement = document.createElement("div");
       idElement.classList.add("wager-participant-id");
-      idElement.textContent = isCurrentUser ? "You" : clientID;
+      const displayName = isCurrentUser ? "You" : getDisplayName(clientID);
+      idElement.textContent = displayName;
 
       const valueElement = document.createElement("div");
       valueElement.classList.add("wager-value");
@@ -487,10 +567,12 @@ const trialPhase = (function () {
       const clientID = sessionStorage.getItem("PROLIFIC_PID");
       const timestamp = new Date().toISOString();
 
-      chat.appendMessage("You", message);
+      const userName = sessionStorage.getItem("userName") || "Unknown";
+      chat.appendMessage(userName, message);
 
       groupChatMessages.push({
         user: clientID,
+        userName: userName,
         message: message,
         timestamp: timestamp,
       });
@@ -499,6 +581,7 @@ const trialPhase = (function () {
         JSON.stringify({
           type: "chat",
           clientID: clientID,
+          userName: userName,
           sessionID: sessionID,
           message: message,
           timestamp: timestamp,
@@ -526,10 +609,16 @@ const trialPhase = (function () {
 
     console.log(`Group Initial Bet Confirmed: ${initialWager}`);
 
+    const myClientID = sessionStorage.getItem("PROLIFIC_PID");
+    const myUserName = sessionStorage.getItem("userName") || "You";
+    
+    collectedWagers[myClientID] = initialWager;
+    collectedUserNames[myClientID] = myUserName;
+
     ws.send(
       JSON.stringify({
         type: "updateWager",
-        clientID: sessionStorage.getItem("PROLIFIC_PID"),
+        clientID: myClientID,
         sessionID: sessionID,
         wagerType: "initialWager",
         value: initialWager,
@@ -538,29 +627,25 @@ const trialPhase = (function () {
     ws.send(
       JSON.stringify({
         type: "confirmDecision",
-        clientID: sessionStorage.getItem("PROLIFIC_PID"),
+        clientID: myClientID,
         sessionID: sessionID,
         phase: "groupDelib",
       })
     );
 
-    const wagersDisplay = groupDelibScreen.querySelector(
-      "#confirmed-wagers-display"
-    );
-    const wagersContainer = groupDelibScreen.querySelector("#wagers-container");
-
+    const wagersDisplay = groupDelibScreen.querySelector("#confirmed-wagers-display");
     wagersDisplay.style.display = "flex";
 
-    const myClientID = sessionStorage.getItem("PROLIFIC_PID");
-    const tempWagers = {};
-    tempWagers[myClientID] = initialWager;
-
-    displayAllConfirmedWagers(tempWagers);
-
+    const wagersContainer = groupDelibScreen.querySelector("#wagers-container");
+    wagersContainer.innerHTML = "";
+    
     const waitingMsg = document.createElement("div");
-    waitingMsg.className = "waiting-message";
-    waitingMsg.textContent = "Your bet confirmed. Waiting for others...";
+    waitingMsg.className = "waiting-message persistent-waiting";
+    const wagerCount = Object.keys(collectedWagers).length;
+    waitingMsg.textContent = `Your bet confirmed. Waiting for others... (${wagerCount}/${expectedParticipants} received)`;
     wagersContainer.appendChild(waitingMsg);
+    
+    wagersDisplay.style.display = "flex";
   }
 
   function buildFinalDecisionScreen() {
@@ -593,6 +678,13 @@ const trialPhase = (function () {
     confirmButton.disabled = true;
     confirmButton.textContent = "Final Bet Confirmed";
 
+    const contentEl = finalDecisionScreen.querySelector("#final-decision-content");
+    const movingMsgEl = document.createElement("p");
+    movingMsgEl.innerHTML = "<strong>Bet confirmed. Waiting for results...</strong>";
+    movingMsgEl.style.marginTop = "15px";
+    movingMsgEl.style.color = "#00ff00";
+    contentEl.appendChild(movingMsgEl);
+
     console.log(`Final Bet Confirmed: ${finalWager}`);
 
     ws.send(
@@ -612,19 +704,6 @@ const trialPhase = (function () {
         phase: "finalDecision",
       })
     );
-
-    const contentEl = finalDecisionScreen.querySelector(
-      "#final-decision-content"
-    );
-    let msgEl = contentEl.querySelector(".confirmation-message");
-    if (!msgEl) {
-      msgEl = document.createElement("p");
-      msgEl.className = "confirmation-message";
-      msgEl.style.marginTop = "15px";
-      msgEl.style.fontWeight = "bold";
-      contentEl.appendChild(msgEl);
-    }
-    msgEl.innerHTML = "Waiting for results...";
   }
 
   function buildResultScreen() {
@@ -684,16 +763,18 @@ const trialPhase = (function () {
     contentEl.innerHTML = `
       <p><strong>Wallet:</strong> $${wallet}</p>
       ${generateFighterTableHTML()}
-      <p><strong>AI Prediction:</strong> ${currentFightData.aiPrediction}</p>
-      ${
-        window.aiMode !== "neutralAI"
-          ? `<p><strong>Rationale:</strong> ${
-              currentFightData.justification || "N/A"
-            }</p>`
-          : ""
-      }
+      <div class="ai-highlight">
+        <p><strong>AI Prediction:</strong> ${currentFightData.aiPrediction}</p>
+        ${
+          window.aiMode !== "neutralAI"
+            ? `<p><strong>Explanation:</strong> ${
+                currentFightData.justification || "N/A"
+              }</p>`
+            : ""
+        }
+      </div>
       <div class="wager-slider-container" style="margin-top: 20px;">
-        <label for="initial-wager-range">Initial Bet (0-4):</label>
+        <label for="initial-wager-range">Initial Bet (0-4): <span id="initial-wager-value">${initialWager}</span></label>
         <input type="range" min="0" max="4" step="1" value="${initialWager}" id="initial-wager-range" />
       </div>
     `;
@@ -702,7 +783,10 @@ const trialPhase = (function () {
     wagerSlider.disabled = false;
     wagerSlider.value = initialWager;
     wagerSlider.addEventListener("input", (e) => {
-      if (!soloInitialConfirmed) initialWager = parseInt(e.target.value, 10);
+      if (!soloInitialConfirmed){
+        initialWager = parseInt(e.target.value, 10);
+        document.getElementById("initial-wager-value").textContent = initialWager;
+      }
     });
 
     initialScreen.style.display = "block";
@@ -728,21 +812,23 @@ const trialPhase = (function () {
     );
     const wagersContainer = groupDelibScreen.querySelector("#wagers-container");
 
-    initialWager = 2;
+    // initialWager = 2;
 
     const fightInfoEl = groupDelibScreen.querySelector("#group-fight-info");
     const wallet = utilities.getWallet();
     fightInfoEl.innerHTML = `
       <p><strong>Wallet:</strong> $${wallet}</p>
       ${generateFighterTableHTML()}
-      <p><strong>AI Prediction:</strong> ${currentFightData.aiPrediction}</p>
-      ${
-        window.aiMode !== "neutralAI"
-          ? `<p><strong>Rationale:</strong> ${
-              currentFightData.justification || "N/A"
-            }</p>`
-          : ""
-      }
+      <div class="ai-highlight">
+        <p><strong>AI Prediction:</strong> ${currentFightData.aiPrediction}</p>
+        ${
+          window.aiMode !== "neutralAI"
+            ? `<p><strong>Explanation:</strong> ${
+                currentFightData.justification || "N/A"
+              }</p>`
+            : ""
+        }
+      </div>
     `;
 
     if (currentSubPhase === "wager") {
@@ -761,6 +847,7 @@ const trialPhase = (function () {
 
       wagerSlider.disabled = false;
       wagerSlider.value = initialWager;
+      document.getElementById("group-wager-value").textContent = initialWager;
       confirmButton.disabled = false;
       confirmButton.textContent = "Confirm Bet";
       enableChatInputUI(false);
@@ -770,7 +857,9 @@ const trialPhase = (function () {
         const myClientID = sessionStorage.getItem("PROLIFIC_PID");
         if (rejoinWagers[myClientID] !== undefined) {
           isGroupWagerConfirmed = true;
-          wagerSlider.value = rejoinWagers[myClientID];
+          initialWager = rejoinWagers[myClientID];
+          wagerSlider.value = initialWager;
+          document.getElementById("group-wager-value").textContent = initialWager;
           wagerSlider.disabled = true;
           confirmButton.disabled = true;
           confirmButton.textContent = "Bet Confirmed";
@@ -819,26 +908,31 @@ const trialPhase = (function () {
     contentEl.innerHTML = `
       <p><strong>Wallet:</strong> ${wallet}</p>
       ${generateFighterTableHTML()}
-      <p><strong>AI Prediction:</strong> ${currentFightData.aiPrediction}</p>
-      ${
-        window.aiMode !== "neutralAI"
-          ? `<p><strong>Rationale:</strong> ${
-              currentFightData.justification || "N/A"
-            }</p>`
-          : ""
-      }
+      <div class="ai-highlight">
+        <p><strong>AI Prediction:</strong> ${currentFightData.aiPrediction}</p>
+        ${
+          window.aiMode !== "neutralAI"
+            ? `<p><strong>Explanation:</strong> ${
+                currentFightData.justification || "N/A"
+              }</p>`
+            : ""
+        }
+      </div>
       <div class="wager-slider-container" style="margin-top: 20px;">
-        <label for="final-wager-range">Final Bet (0-4):</label>
+        <label for="final-wager-range">Final Bet (0-4): <span id="final-wager-value">${finalWager}</span></label>
         <input type="range" min="0" max="4" step="1" value="${finalWager}" id="final-wager-range" />
       </div>
-      <p class="confirmation-message" style="margin-top: 15px; font-weight: bold; display: none;"></p> <!-- Placeholder for confirmation -->
+      <p class="confirmation-message" style="margin-top: 15px; font-weight: bold; display: none;"></p>
     `;
 
     const finalWagerSlider = contentEl.querySelector("#final-wager-range");
     finalWagerSlider.disabled = false;
     finalWagerSlider.value = finalWager;
     finalWagerSlider.addEventListener("input", (e) => {
-      if (!finalDecisionConfirmed) finalWager = parseInt(e.target.value, 10);
+      if (!finalDecisionConfirmed) {
+        finalWager = parseInt(e.target.value, 10);
+        document.getElementById("final-wager-value").textContent = finalWager;
+      }
     });
 
     const msgEl = contentEl.querySelector(".confirmation-message");
@@ -965,8 +1059,8 @@ const trialPhase = (function () {
         <thead>
           <tr>
             <th>Stat</th>
-            <th>Fighter A (Red)</th>
-            <th>Fighter B (Blue)</th>
+            <th class="${currentFightData.winner === 1 ? 'winner-column' : ''}">Fighter A</th>
+            <th class="${currentFightData.winner === 0 ? 'winner-column' : ''}">Fighter B</th>
           </tr>
          </thead>
          <tbody>
@@ -1064,8 +1158,8 @@ const trialPhase = (function () {
         aiPrediction: `Fighter ${
           trialDataRow.predicted_winner === "0" ||
           trialDataRow.predicted_winner === 0
-            ? "B (Blue)"
-            : "A (Red)"
+            ? "B"
+            : "A"
         } to win`,
         aiRationale: trialDataRow.rationale_feature || "N/A",
         winner:

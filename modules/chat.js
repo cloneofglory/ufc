@@ -30,7 +30,8 @@ const chat = (() => {
             data.clientID !== currentClientID 
           ) {
             // Append the received message to the chat container.
-            appendMessage(data.clientID, data.message);
+            const senderName = data.userName || data.clientID;
+            appendMessage(senderName, data.message);
           }
         } catch (error) {
           console.error("Chat: Error parsing incoming message", error);
@@ -41,10 +42,10 @@ const chat = (() => {
 
   /**
    * Appends a chat message to the chat container.
-   * @param {string} clientID - Sender's ID.
+   * @param {string} senderName - Sender's username.
    * @param {string} message - Message text.
    */
-  function appendMessage(clientID, message) {
+  function appendMessage(senderName, message) {
     const chatContainer = document.getElementById("chat-messages");
     if (!chatContainer) {
       console.error("Chat container not found.");
@@ -52,7 +53,7 @@ const chat = (() => {
     }
     const msgDiv = document.createElement("div");
     msgDiv.classList.add("chat-message");
-    msgDiv.innerHTML = `<span class="user-name">${clientID}:</span> <span class="message-text">${message}</span>`;
+    msgDiv.innerHTML = `<span class="user-name">${senderName}:</span> <span class="message-text">${message}</span>`;
     chatContainer.appendChild(msgDiv);
     chatContainer.scrollTop = chatContainer.scrollHeight;
   }

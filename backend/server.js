@@ -27,6 +27,7 @@ const server = http.createServer(app);
 const wss = new WebSocket.Server({ server });
 
 let clients = new Map();
+let clientUserNames = new Map();
 
 const PORT = process.env.PORT || 8080;
 
@@ -454,7 +455,14 @@ function updateParticipantData(sessionID, clientID, dataType, value) {
 
   if (dataType === "initialWager" && state.mode === "group") {
     state.participantData[clientID].wagerConfirmed = true;
-    checkAndBroadcastWagers(sessionID);
+     broadcastToSession(sessionID, {
+      type: "individualWager",
+      clientID: clientID,
+      userName: clientUserNames.get(clientID) || clientID,
+      wager: value,
+      trial: state.currentTrial
+    });
+    // checkAndBroadcastWagers(sessionID);
   }
 
   sessionStates.set(sessionID, state);
@@ -469,6 +477,7 @@ function checkAndBroadcastWagers(sessionID) {
   let allConfirmed = true;
   let receivedCount = 0;
   const currentWagers = {};
+  const userNames = {};
 
   for (const pid of state.participants) {
     if (!state.participantData[pid]) {
@@ -484,6 +493,7 @@ function checkAndBroadcastWagers(sessionID) {
       receivedCount++;
     }
     currentWagers[pid] = state.participantData[pid].initialWager ?? 2;
+    userNames[pid] = clientUserNames.get(pid) || pid;
   }
 
   const shouldBroadcast = allConfirmed || state.currentSubPhase === "chat";
@@ -496,11 +506,8 @@ function checkAndBroadcastWagers(sessionID) {
       type: "allWagersSubmitted",
       trial: state.currentTrial,
       wagers: currentWagers,
+      userNames: userNames
     });
-  } else {
-    console.log(
-      `Session ${sessionID} trial ${state.currentTrial}: Waiting for more initial wagers. Received: ${receivedCount}/${state.participants.length}`
-    );
   }
 }
 
@@ -524,6 +531,9 @@ wss.on("connection", (ws) => {
     if (data.type === "register" && clientID) {
       clients.set(clientID, ws);
       console.log(`Client registered: ${clientID}`);
+      if (data.userName) {
+        clientUserNames.set(clientID, data.userName);
+      }
       broadcastParticipantCount();
 
       const sessionID = getClientSession(clientID);
@@ -600,7 +610,11 @@ wss.on("connection", (ws) => {
           state.currentPhase === PHASES.GROUP_DELIB &&
           state.currentSubPhase === "chat"
         ) {
-          broadcastChatMessage(data);
+          const chatData = {
+            ...data,
+            userName: clientUserNames.get(clientID) || clientID
+          };
+          broadcastChatMessage(chatData);
         } else {
           console.log(
             `Chat message from ${clientID} ignored: Not in group chat phase.`
@@ -953,6 +967,7 @@ wss.on("connection", (ws) => {
       if (clientWs === ws) {
         disconnectedClientID = clientID;
         clients.delete(clientID);
+        clientUserNames.delete(clientID); 
         console.log(`Client disconnected: ${clientID}`);
         break;
       }

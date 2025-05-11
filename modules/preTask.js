@@ -16,7 +16,7 @@ const preTask = (function () {
     preTaskScreen.innerHTML = `
       <h1>Welcome to the UFC Prediction Experiment</h1>
       <p>Please complete the following survey:</p><br/>
-      <label for="survey-name">Name:</label>
+      <label for="survey-name">Username:</label>
       <input type="text" id="survey-name" placeholder="Enter your name" required /><br/><br/>
       
       <p>Before we begin the main task, we'd like to understand how important you think each of the following fighter stats is when predicting who will win a UFC fight.</p> <br/>
@@ -160,6 +160,7 @@ const preTask = (function () {
       alert("Please enter your name.");
       return;
     }
+    sessionStorage.setItem("userName", name);
     const clientID = sessionStorage.getItem("PROLIFIC_PID") || name;
     preTaskData = {
       clientID: clientID,
@@ -251,7 +252,7 @@ const preTask = (function () {
           <p class="consent-text">In this study, you will engage in a 
           <strong>decision-making task</strong> involving predictions about the outcomes of real UFC fights. 
           You'll be shown fighter statistics (such as age, height, win/loss record, and performance metrics), 
-          and in some cases, a prediction from an AI system along with a brief rationale.</p><br/>
+          and in some cases, a prediction from an AI system along with a brief explanation.</p><br/>
           
           <p class="consent-text">Depending on your assigned condition, you will either complete the task 
           <strong>individually</strong> (solo mode) or <strong>collaborate with two other participants</strong> (group mode). 

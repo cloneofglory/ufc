@@ -5,8 +5,9 @@ document.addEventListener("DOMContentLoaded", () => {
   ws.onopen = () => {
     console.log("Connected to WebSocket server");
     const clientID = generateAndStoreClientID();
+    const userName = sessionStorage.getItem("userName") || "Anonymous";
     console.log("Using clientID:", clientID);
-    ws.send(JSON.stringify({ type: "register", clientID }));
+    ws.send(JSON.stringify({ type: "register", clientID, userName }));
 
     preTask.init(ws);
     trialPhase.init(ws);
