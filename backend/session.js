@@ -362,6 +362,8 @@ const sessionManager = {
             submissions[cleanPayload.clientID] = {
               initialWager: cleanPayload.initialWager,
               finalWager: cleanPayload.finalWager,
+              walletBefore: cleanPayload.walletBefore,
+              walletAfter: cleanPayload.walletAfter,
               timestamp: cleanPayload.timestamp,
             };
             transaction.set(trialDocRef, { ...commonData, submissions });
@@ -371,6 +373,8 @@ const sessionManager = {
             submissions[cleanPayload.clientID] = {
               initialWager: cleanPayload.initialWager,
               finalWager: cleanPayload.finalWager,
+              walletBefore: cleanPayload.walletBefore,
+              walletAfter: cleanPayload.walletAfter,
               timestamp: cleanPayload.timestamp,
             };
             transaction.update(trialDocRef, {
