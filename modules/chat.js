@@ -45,18 +45,69 @@ const chat = (() => {
    * @param {string} senderName - Sender's username.
    * @param {string} message - Message text.
    */
-  function appendMessage(senderName, message) {
-    const chatContainer = document.getElementById("chat-messages");
-    if (!chatContainer) {
-      console.error("Chat container not found.");
-      return;
+    function appendMessage(senderName, message) {
+      const chatContainer = document.getElementById("chat-messages");
+      if (!chatContainer) {
+        console.error("Chat container not found.");
+        return;
+      }
+      
+      let displayName;
+      if (senderName === "You") {
+        displayName = "Player (You)";
+      } else {
+        const existingMessages = chatContainer.querySelectorAll(".chat-message");
+        let playerNumber = 1;
+        let found = false;
+        
+        for (let i = 0; i < existingMessages.length; i++) {
+          const nameElement = existingMessages[i].querySelector(".user-name");
+          if (nameElement && nameElement.dataset.originalName === senderName) {
+            displayName = nameElement.textContent.split(":")[0];
+            found = true;
+            break;
+          }
+        }
+        
+        if (!found) {
+          const usedNumbers = new Set();
+          for (let i = 0; i < existingMessages.length; i++) {
+            const nameElement = existingMessages[i].querySelector(".user-name");
+            if (nameElement) {
+              const text = nameElement.textContent;
+              const match = text.match(/Player (\d+)/);
+              if (match) {
+                usedNumbers.add(parseInt(match[1]));
+              }
+            }
+          }
+          
+          while (usedNumbers.has(playerNumber)) {
+            playerNumber++;
+          }
+          
+          displayName = `Player ${playerNumber}`;
+        }
+      }
+      
+      const msgDiv = document.createElement("div");
+      msgDiv.classList.add("chat-message");
+      
+      const nameSpan = document.createElement("span");
+      nameSpan.classList.add("user-name");
+      nameSpan.dataset.originalName = senderName;
+      nameSpan.textContent = displayName + ":";
+      
+      const messageSpan = document.createElement("span");
+      messageSpan.classList.add("message-text");
+      messageSpan.textContent = message;
+      
+      msgDiv.appendChild(nameSpan);
+      msgDiv.appendChild(messageSpan);
+      
+      chatContainer.appendChild(msgDiv);
+      chatContainer.scrollTop = chatContainer.scrollHeight;
     }
-    const msgDiv = document.createElement("div");
-    msgDiv.classList.add("chat-message");
-    msgDiv.innerHTML = `<span class="user-name">${senderName}:</span> <span class="message-text">${message}</span>`;
-    chatContainer.appendChild(msgDiv);
-    chatContainer.scrollTop = chatContainer.scrollHeight;
-  }
 
   /**
    * Sends a chat message via the WebSocket connection.

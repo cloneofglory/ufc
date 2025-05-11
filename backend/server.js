@@ -281,7 +281,6 @@ function startTrialPhase(sessionID) {
     }
   }
 
-  // Send phase start notification to all clients in this session
   broadcastToSession(sessionID, {
     type: "phaseChange",
     sessionID: sessionID,
@@ -303,7 +302,12 @@ function startTrialPhase(sessionID) {
         : null,
     aiMode: state.aiMode,
     trialData: currentTrialData,
+    participants: state.participants
   });
+
+  if (state.currentPhase === PHASES.GROUP_DELIB && state.currentSubPhase === "chat") {
+    checkAndBroadcastWagers(sessionID);
+  }
 
   if (state.phaseTimeoutId) clearTimeout(state.phaseTimeoutId);
 
@@ -331,6 +335,16 @@ function transitionToNext(sessionID) {
       if (state.currentSubPhase === "wager") {
         state.currentSubPhase = "chat";
         state.phaseStartTime = Date.now();
+        
+        state.participants.forEach(pid => {
+          if (state.participantData[pid]) {
+            const participantWager = state.participantData[pid].initialWager;
+            if (participantWager === null) {
+              state.participantData[pid].initialWager = 2;
+            }
+          }
+        });
+        
         checkAndBroadcastWagers(sessionID);
       } else {
         state.currentPhase = PHASES.FINAL_DECISION;
@@ -414,6 +428,9 @@ function broadcastChatMessage(data) {
   if (!sessionID || !sessionStates.has(sessionID)) return;
 
   const state = sessionStates.get(sessionID);
+  if (!data.userName && clientUserNames.has(data.clientID)) {
+    data.userName = clientUserNames.get(data.clientID);
+  }
   const message = JSON.stringify(data);
 
   state.participants.forEach((pid) => {
@@ -455,14 +472,6 @@ function updateParticipantData(sessionID, clientID, dataType, value) {
 
   if (dataType === "initialWager" && state.mode === "group") {
     state.participantData[clientID].wagerConfirmed = true;
-     broadcastToSession(sessionID, {
-      type: "individualWager",
-      clientID: clientID,
-      userName: clientUserNames.get(clientID) || clientID,
-      wager: value,
-      trial: state.currentTrial
-    });
-    // checkAndBroadcastWagers(sessionID);
   }
 
   sessionStates.set(sessionID, state);
@@ -472,10 +481,8 @@ function checkAndBroadcastWagers(sessionID) {
   if (!sessionStates.has(sessionID)) return;
   const state = sessionStates.get(sessionID);
 
-  if (state.mode !== "group") return;
+  if (state.mode !== "group" || state.currentSubPhase !== "chat") return;
 
-  let allConfirmed = true;
-  let receivedCount = 0;
   const currentWagers = {};
   const userNames = {};
 
@@ -487,28 +494,20 @@ function checkAndBroadcastWagers(sessionID) {
       state.participantData[pid] = { initialWager: null };
     }
 
-    if (state.participantData[pid].initialWager === null) {
-      allConfirmed = false;
-    } else {
-      receivedCount++;
-    }
-    currentWagers[pid] = state.participantData[pid].initialWager ?? 2;
+    const participantWager = state.participantData[pid].initialWager ?? 2;
+    currentWagers[pid] = participantWager;
     userNames[pid] = clientUserNames.get(pid) || pid;
   }
 
-  const shouldBroadcast = allConfirmed || state.currentSubPhase === "chat";
-
-  if (shouldBroadcast) {
-    console.log(
-      `Session ${sessionID} trial ${state.currentTrial}: Broadcasting wagers. All confirmed: ${allConfirmed}. Participants: ${state.participants.length}, Received: ${receivedCount}`
-    );
-    broadcastToSession(sessionID, {
-      type: "allWagersSubmitted",
-      trial: state.currentTrial,
-      wagers: currentWagers,
-      userNames: userNames
-    });
-  }
+  console.log(
+    `Session ${sessionID} trial ${state.currentTrial}: Broadcasting all wagers at chat phase start.`
+  );
+  broadcastToSession(sessionID, {
+    type: "allWagersSubmitted",
+    trial: state.currentTrial,
+    wagers: currentWagers,
+    userNames: userNames,
+  });
 }
 
 sessionManager.setUpdateCallback(broadcastSessionUpdate);
@@ -580,6 +579,7 @@ wss.on("connection", (ws) => {
                     return acc;
                   }, {})
                 : null,
+           participants: state.participants 
           })
         );
         console.log(

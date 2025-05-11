@@ -5,7 +5,7 @@ document.addEventListener("DOMContentLoaded", () => {
   ws.onopen = () => {
     console.log("Connected to WebSocket server");
     const clientID = generateAndStoreClientID();
-    const userName = sessionStorage.getItem("userName") || "Anonymous";
+    const userName = sessionStorage.getItem("userName");
     console.log("Using clientID:", clientID);
     ws.send(JSON.stringify({ type: "register", clientID, userName }));
 

@@ -270,7 +270,7 @@ const preTask = (function () {
             <li><strong>Alternatives:</strong> There are no alternative procedures available. The only alternative is not to participate in this study.</li>
             <li><strong>Confidentiality:</strong> The data you provide may be collected and used by Prolific as per its privacy agreement. All data collected will be kept strictly confidential and stored securely. No personal identifying information will be collected.</li>
             <li><strong>Age Requirement:</strong> You must be above 18 years old to participate.</li>
-            <li><strong>IRB Approval:</strong> This study has been reviewed and approved by the Institutional Review Board (IRB) atUniversity of California, Irvine.</li>
+            <li><strong>IRB Approval:</strong> This study has been reviewed and approved by the Institutional Review Board (IRB) at University of California, Irvine.</li>
           </ul>
           
           <h3>Consent to Participate</h3>

@@ -27,6 +27,7 @@ let autoTransitionTimerId = null;
 
 let collectedWagers = {};
 let collectedUserNames = {};
+let playerNumberMap = new Map();
 let expectedParticipants = 3;
 
 const trialPhase = (function () {
@@ -45,13 +46,24 @@ const trialPhase = (function () {
     ws.addEventListener("message", handleServerMessage);
   }
 
-  function getDisplayName(clientID) {
-    const myClientID = sessionStorage.getItem("PROLIFIC_PID");
-    if (clientID === myClientID) {
-      return sessionStorage.getItem("userName") || "You";
-    }
-    return collectedUserNames[clientID] || clientID;
+function getPlayerNumber(clientID) {
+  const myClientID = sessionStorage.getItem("PROLIFIC_PID");
+  if (clientID === myClientID) {
+    return "Player (You)";
   }
+  
+  // Check if we already have a mapping for this client ID
+  if (!playerNumberMap.has(clientID)) {
+    // Assign a stable number based on alphabetical ordering of client IDs
+    // This ensures the same client always gets the same number across all users
+    const allClientIDs = [...playerNumberMap.keys(), clientID].sort();
+    const index = allClientIDs.indexOf(clientID);
+    const playerNum = index + 1; // +1 because player numbers start at 1
+    playerNumberMap.set(clientID, playerNum);
+  }
+  
+  return `Player ${playerNumberMap.get(clientID)}`;
+}
 
   function handleServerMessage(event) {
     try {
@@ -154,7 +166,6 @@ const trialPhase = (function () {
 
         resetPhaseFlags();
 
-        // Show current phase screen
         switch (currentPhase) {
           case "initial":
             showTrialScreenSolo();
@@ -178,11 +189,9 @@ const trialPhase = (function () {
       } else if (data.type === "allWagersSubmitted" && !isSolo) {
         if (data.userNames) {
           Object.assign(collectedUserNames, data.userNames);
-        }
+        } 
         displayAllConfirmedWagers(data.wagers);
-        const wagersDisplay = groupDelibScreen.querySelector(
-          "#confirmed-wagers-display"
-        );
+        const wagersDisplay = groupDelibScreen.querySelector("#confirmed-wagers-display");
         if (wagersDisplay) {
           wagersDisplay.style.display = "flex";
         }
@@ -193,13 +202,6 @@ const trialPhase = (function () {
         }
         const wagerCount = Object.keys(collectedWagers).length;
         updateWaitingMessage(wagerCount, expectedParticipants);
-        if (wagerCount === expectedParticipants) {
-          const wagersContainer = groupDelibScreen.querySelector("#wagers-container");
-          wagersContainer.innerHTML = "";
-          displayAllConfirmedWagers(collectedWagers);
-        } else {
-          updateWaitingMessage(wagerCount, expectedParticipants);
-        }
       } else if (data.type === "wagerUpdated") {
         console.log(
           `Server confirmed ${data.wagerType} update to ${data.value}`
@@ -225,20 +227,8 @@ const trialPhase = (function () {
     
     let waitingMsg = wagersContainer.querySelector(".waiting-message");
     
-    if (!waitingMsg || !waitingMsg.classList.contains("persistent-waiting")) {
-      if (!waitingMsg) {
-        waitingMsg = document.createElement("div");
-        waitingMsg.className = "waiting-message";
-        wagersContainer.appendChild(waitingMsg);
-      }
-      waitingMsg.textContent = `Waiting for bets... (${received}/${total} received)`;
-    } else {
-      waitingMsg.textContent = `Your bet confirmed. Waiting for others... (${received}/${total} received)`;
-    }
-    
-    const wagersDisplay = groupDelibScreen.querySelector("#confirmed-wagers-display");
-    if (wagersDisplay) {
-      wagersDisplay.style.display = "flex";
+    if (waitingMsg && waitingMsg.classList.contains("persistent-waiting")) {
+      waitingMsg.innerHTML = `Your bet of ${initialWager} has been confirmed.`;
     }
   }
 
@@ -260,7 +250,6 @@ const trialPhase = (function () {
       collectedWagers = {};
       collectedUserNames = {};
     }
-    
   }
 
   function clearAllTimers() {
@@ -367,16 +356,28 @@ const trialPhase = (function () {
   }
 
   function handleAutoConfirm() {
-    console.log(
-      `Auto-confirming phase: ${currentPhase} ${currentSubPhase || ""}`
-    );
+    console.log(`Auto-confirming phase: ${currentPhase} ${currentSubPhase || ""}`);
     switch (currentPhase) {
       case "initial":
         if (!soloInitialConfirmed) onConfirmInitial();
         break;
       case "groupDelib":
         if (currentSubPhase === "wager" && !isGroupWagerConfirmed) {
-          onConfirmGroupWager();
+          const myClientID = sessionStorage.getItem("PROLIFIC_PID");
+          const wagerSlider = groupDelibScreen.querySelector("#group-wager-range");
+          initialWager = parseInt(wagerSlider.value, 10);
+          
+          collectedWagers[myClientID] = initialWager;
+          
+          ws.send(
+            JSON.stringify({
+              type: "updateWager",
+              clientID: myClientID,
+              sessionID: sessionID,
+              wagerType: "initialWager",
+              value: initialWager,
+            })
+          );
         }
         break;
       case "finalDecision":
@@ -488,14 +489,12 @@ const trialPhase = (function () {
       </div>`;
     appContainer.appendChild(groupDelibScreen);
 
-    groupDelibScreen
-      .querySelector("#group-wager-range")
-      .addEventListener("input", (e) => {
-        if (!isGroupWagerConfirmed) {
-          initialWager = parseInt(e.target.value, 10);
-          document.getElementById("group-wager-value").textContent = initialWager;
-        }
-      });
+   groupDelibScreen
+    .querySelector("#group-wager-range")
+    .addEventListener("input", (e) => {
+      initialWager = parseInt(e.target.value, 10);
+      document.getElementById("group-wager-value").textContent = initialWager;
+    });
     groupDelibScreen
       .querySelector("#btn-confirm-group-wager")
       .addEventListener("click", onConfirmGroupWager);
@@ -512,26 +511,27 @@ const trialPhase = (function () {
   }
 
   function displayAllConfirmedWagers(wagers) {
-    const displayContainer =
-      groupDelibScreen.querySelector("#wagers-container");
-    const wagersDisplay = groupDelibScreen.querySelector(
-      "#confirmed-wagers-display"
-    );
+    const displayContainer = groupDelibScreen.querySelector("#wagers-container");
+    const wagersDisplay = groupDelibScreen.querySelector("#confirmed-wagers-display");
 
     if (!displayContainer) return;
 
     wagersDisplay.style.display = "flex";
-
     displayContainer.innerHTML = "";
 
     const currentUserClientID = sessionStorage.getItem("PROLIFIC_PID");
     const clientIDs = Object.keys(wagers).sort();
 
     if (clientIDs.length === 0) {
-      displayContainer.innerHTML =
-        '<p style="color: #aaa; width: 100%; text-align: center;">Waiting for all bets...</p>';
+      displayContainer.innerHTML = '<p style="color: #aaa; width: 100%; text-align: center;">Waiting for all bets...</p>';
       return;
     }
+
+    // Create a map of client IDs to player numbers
+    const playerMap = {};
+    clientIDs.forEach((id, index) => {
+      playerMap[id] = `Player ${index + 1}`;
+    });
 
     clientIDs.forEach((clientID) => {
       const wagerValue = wagers[clientID];
@@ -545,8 +545,8 @@ const trialPhase = (function () {
 
       const idElement = document.createElement("div");
       idElement.classList.add("wager-participant-id");
-      const displayName = isCurrentUser ? "You" : getDisplayName(clientID);
-      idElement.textContent = displayName;
+      const playerLabel = playerMap[clientID];
+      idElement.textContent = isCurrentUser ? `${playerLabel} (You)` : playerLabel;
 
       const valueElement = document.createElement("div");
       valueElement.classList.add("wager-value");
@@ -567,12 +567,11 @@ const trialPhase = (function () {
       const clientID = sessionStorage.getItem("PROLIFIC_PID");
       const timestamp = new Date().toISOString();
 
-      const userName = sessionStorage.getItem("userName") || "Unknown";
-      chat.appendMessage(userName, message);
+      chat.appendMessage("You", message);
 
       groupChatMessages.push({
         user: clientID,
-        userName: userName,
+        userName: sessionStorage.getItem("userName") || "Unknown",
         message: message,
         timestamp: timestamp,
       });
@@ -581,7 +580,7 @@ const trialPhase = (function () {
         JSON.stringify({
           type: "chat",
           clientID: clientID,
-          userName: userName,
+          userName: sessionStorage.getItem("userName") || "Unknown",
           sessionID: sessionID,
           message: message,
           timestamp: timestamp,
@@ -597,9 +596,7 @@ const trialPhase = (function () {
     isGroupWagerConfirmed = true;
 
     const wagerSlider = groupDelibScreen.querySelector("#group-wager-range");
-    const confirmButton = groupDelibScreen.querySelector(
-      "#btn-confirm-group-wager"
-    );
+    const confirmButton = groupDelibScreen.querySelector("#btn-confirm-group-wager");
 
     initialWager = parseInt(wagerSlider.value, 10);
 
@@ -633,18 +630,17 @@ const trialPhase = (function () {
       })
     );
 
-    const wagersDisplay = groupDelibScreen.querySelector("#confirmed-wagers-display");
-    wagersDisplay.style.display = "flex";
-
+    const confirmationMsg = document.createElement("div");
+    confirmationMsg.className = "confirmation-message persistent-waiting";
+    confirmationMsg.innerHTML = `Your bet of ${initialWager} has been confirmed.`;
+    confirmationMsg.style.color = "#00ff00";
+    confirmationMsg.style.marginTop = "15px";
+    
     const wagersContainer = groupDelibScreen.querySelector("#wagers-container");
     wagersContainer.innerHTML = "";
+    wagersContainer.appendChild(confirmationMsg);
     
-    const waitingMsg = document.createElement("div");
-    waitingMsg.className = "waiting-message persistent-waiting";
-    const wagerCount = Object.keys(collectedWagers).length;
-    waitingMsg.textContent = `Your bet confirmed. Waiting for others... (${wagerCount}/${expectedParticipants} received)`;
-    wagersContainer.appendChild(waitingMsg);
-    
+    const wagersDisplay = groupDelibScreen.querySelector("#confirmed-wagers-display");
     wagersDisplay.style.display = "flex";
   }
 
@@ -761,7 +757,7 @@ const trialPhase = (function () {
     const contentEl = initialScreen.querySelector("#initial-content");
     const wallet = utilities.getWallet();
     contentEl.innerHTML = `
-      <p><strong>Wallet:</strong> $${wallet}</p>
+      <p><strong>💰 Wallet:</strong> $${wallet}</p>
       ${generateFighterTableHTML()}
       <div class="ai-highlight">
         <p><strong>AI Prediction:</strong> ${currentFightData.aiPrediction}</p>
@@ -798,21 +794,14 @@ const trialPhase = (function () {
       return;
     }
 
-    groupDelibScreen.querySelector("#group-trial-number").textContent =
-      currentTrial;
+    groupDelibScreen.querySelector("#group-trial-number").textContent = currentTrial;
     const phaseTitle = groupDelibScreen.querySelector("#group-phase-title");
     const wagerSection = groupDelibScreen.querySelector("#wager-section");
     const chatSection = groupDelibScreen.querySelector("#chat-section");
     const wagerSlider = groupDelibScreen.querySelector("#group-wager-range");
-    const confirmButton = groupDelibScreen.querySelector(
-      "#btn-confirm-group-wager"
-    );
-    const confirmedWagersDisplay = groupDelibScreen.querySelector(
-      "#confirmed-wagers-display"
-    );
+    const confirmButton = groupDelibScreen.querySelector("#btn-confirm-group-wager");
+    const confirmedWagersDisplay = groupDelibScreen.querySelector("#confirmed-wagers-display");
     const wagersContainer = groupDelibScreen.querySelector("#wagers-container");
-
-    // initialWager = 2;
 
     const fightInfoEl = groupDelibScreen.querySelector("#group-fight-info");
     const wallet = utilities.getWallet();
@@ -823,9 +812,7 @@ const trialPhase = (function () {
         <p><strong>AI Prediction:</strong> ${currentFightData.aiPrediction}</p>
         ${
           window.aiMode !== "neutralAI"
-            ? `<p><strong>Explanation:</strong> ${
-                currentFightData.justification || "N/A"
-              }</p>`
+            ? `<p><strong>Explanation:</strong> ${currentFightData.justification || "N/A"}</p>`
             : ""
         }
       </div>
@@ -835,25 +822,29 @@ const trialPhase = (function () {
       phaseTitle.textContent = "Bet Phase";
       wagerSection.style.display = "block";
       chatSection.style.display = "none";
+      confirmedWagersDisplay.style.display = "none";
 
-      if (rejoinWagers && Object.keys(rejoinWagers).length > 0) {
-        confirmedWagersDisplay.style.display = "flex";
-        displayAllConfirmedWagers(rejoinWagers);
-      } else {
-        confirmedWagersDisplay.style.display = "none";
-        wagersContainer.innerHTML =
-          '<p style="color: #aaa; width: 100%; text-align: center;">Waiting for all bets...</p>';
-      }
-
-      wagerSlider.disabled = false;
+      wagerSlider.disabled = isGroupWagerConfirmed;
       wagerSlider.value = initialWager;
       document.getElementById("group-wager-value").textContent = initialWager;
-      confirmButton.disabled = false;
-      confirmButton.textContent = "Confirm Bet";
+      confirmButton.disabled = isGroupWagerConfirmed;
+      confirmButton.textContent = isGroupWagerConfirmed ? "Bet Confirmed" : "Confirm Bet";
       enableChatInputUI(false);
 
+      if (isGroupWagerConfirmed) {
+        wagersContainer.innerHTML = "";
+        const confirmationMsg = document.createElement("div");
+        confirmationMsg.className = "confirmation-message persistent-waiting";
+        confirmationMsg.innerHTML = `Your bet of ${initialWager} has been confirmed.`;
+        confirmationMsg.style.color = "#00ff00";
+        confirmationMsg.style.marginTop = "15px";
+        wagersContainer.appendChild(confirmationMsg);
+        confirmedWagersDisplay.style.display = "flex";
+      } else {
+        wagersContainer.innerHTML = '<p style="color: #aaa; width: 100%; text-align: center;">Select your bet above.</p>';
+      }
+
       if (rejoinWagers && Object.keys(rejoinWagers).length > 0) {
-        displayAllConfirmedWagers(rejoinWagers);
         const myClientID = sessionStorage.getItem("PROLIFIC_PID");
         if (rejoinWagers[myClientID] !== undefined) {
           isGroupWagerConfirmed = true;
@@ -863,6 +854,14 @@ const trialPhase = (function () {
           wagerSlider.disabled = true;
           confirmButton.disabled = true;
           confirmButton.textContent = "Bet Confirmed";
+          wagersContainer.innerHTML = "";
+          const confirmationMsg = document.createElement("div");
+          confirmationMsg.className = "confirmation-message persistent-waiting";
+          confirmationMsg.innerHTML = `Your bet of ${initialWager} has been confirmed.`;
+          confirmationMsg.style.color = "#00ff00";
+          confirmationMsg.style.marginTop = "15px";
+          wagersContainer.appendChild(confirmationMsg);
+          confirmedWagersDisplay.style.display = "flex";
         }
       }
     } else if (currentSubPhase === "chat") {
@@ -874,6 +873,10 @@ const trialPhase = (function () {
       groupDelibScreen.querySelector("#chat-messages").innerHTML = "";
       groupDelibScreen.querySelector("#chat-input-text").value = "";
       enableChatInputUI(true);
+
+      if (rejoinWagers && Object.keys(rejoinWagers).length > 0) {
+        displayAllConfirmedWagers(rejoinWagers);
+      }
     } else {
       phaseTitle.textContent = "Processing...";
       wagerSection.style.display = "none";
@@ -1053,51 +1056,91 @@ const trialPhase = (function () {
     const fa = currentFightData.fighterA || {};
     const fb = currentFightData.fighterB || {};
 
+    const fighterAWins = currentFightData.predicted_winner_numeric === 1;  
+    const fighterBWins = currentFightData.predicted_winner_numeric === 0;
+
+    const featureToRowMap = {
+      "Wins": 0,
+      "Losses": 1,
+      "Age": 2,
+      "Height": 3,
+      "Strikes Landed per Minute": 4,
+      "Significant Strikes Accuracy": 5,
+      "Strike Defense": 6,
+      "Takedown Accuracy": 7,
+      "Takedown Defense": 8,
+      "Strikes Avoided per Minute": 9
+    };
+
+    const rationaleFeature = currentFightData.aiRationale || "";
+    
+    const rowToHighlight = featureToRowMap[rationaleFeature];
+
     return `
-    <div class="fighter-table-container">
-      <table class="fighter-table">
-        <thead>
-          <tr>
-            <th>Stat</th>
-            <th class="${currentFightData.winner === 1 ? 'winner-column' : ''}">Fighter A</th>
-            <th class="${currentFightData.winner === 0 ? 'winner-column' : ''}">Fighter B</th>
-          </tr>
-         </thead>
-         <tbody>
-          <tr><td>Career Wins</td><td>${fa.wins ?? "N/A"}</td><td>${
-      fb.wins ?? "N/A"
-    }</td></tr>
-          <tr><td>Career Losses</td><td>${fa.losses ?? "N/A"}</td><td>${
-      fb.losses ?? "N/A"
-    }</td></tr>
-          <tr><td>Age</td><td>${fa.age ? fa.age + " yrs" : "N/A"}</td><td>${
-      fb.age ? fb.age + " yrs" : "N/A"
-    }</td></tr>
-          <tr><td>Height</td><td>${fa.height || "N/A"}</td><td>${
-      fb.height || "N/A"
-    }</td></tr>
-          <tr><td>Strikes Landed/Min</td><td>${fa.strikelaM ?? "N/A"}</td><td>${
-      fb.strikelaM ?? "N/A"
-    }</td></tr>
-          <tr><td>Strike Accuracy</td><td>${fa.sigSacc ?? "N/A"}</td><td>${
-      fb.sigSacc ?? "N/A"
-    }</td></tr>
-          <tr><td>Strike Defense</td><td>${fa.strDef ?? "N/A"}</td><td>${
-      fb.strDef ?? "N/A"
-    }</td></tr>
-          <tr><td>Takedown Accuracy</td><td>${fa.tdAcc ?? "N/A"}</td><td>${
-      fb.tdAcc ?? "N/A"
-    }</td></tr>
-          <tr><td>Takedown Defense</td><td>${fa.tdDef ?? "N/A"}</td><td>${
-      fb.tdDef ?? "N/A"
-    }</td></tr>
-          <tr><td>Strikes Avoided/Min</td><td>${fa.SApM ?? "N/A"}</td><td>${
-      fb.SApM ?? "N/A"
-    }</td></tr>
-         </tbody>
-      </table>
-    </div>
-    `;
+      <div class="fighter-table-container">
+        <table class="fighter-table">
+          <thead>
+            <tr>
+              <th>Stat</th>
+              <th class="${fighterAWins ? 'winner-column' : ''}">Fighter A</th>
+              <th class="${fighterBWins ? 'winner-column' : ''}">Fighter B</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr class="${window.aiMode !== "neutralAI" && rowToHighlight === 0 ? 'rationale-row' : ''}">
+              <td>Career Wins</td>
+              <td class="${fighterAWins ? 'winner-column-cell' : ''}">${fa.wins ?? "N/A"}</td>
+              <td class="${fighterBWins ? 'winner-column-cell' : ''}">${fb.wins ?? "N/A"}</td>
+            </tr>
+            <tr class="${window.aiMode !== "neutralAI" && rowToHighlight === 1 ? 'rationale-row' : ''}">
+              <td>Career Losses</td>
+              <td class="${fighterAWins ? 'winner-column-cell' : ''}">${fa.losses ?? "N/A"}</td>
+              <td class="${fighterBWins ? 'winner-column-cell' : ''}">${fb.losses ?? "N/A"}</td>
+            </tr>
+            <tr class="${window.aiMode !== "neutralAI" && rowToHighlight === 2 ? 'rationale-row' : ''}">
+              <td>Age</td>
+              <td class="${fighterAWins ? 'winner-column-cell' : ''}">${fa.age ? fa.age + " yrs" : "N/A"}</td>
+              <td class="${fighterBWins ? 'winner-column-cell' : ''}">${fb.age ? fb.age + " yrs" : "N/A"}</td>
+            </tr>
+            <tr class="${window.aiMode !== "neutralAI" && rowToHighlight === 3 ? 'rationale-row' : ''}">
+              <td>Height</td>
+              <td class="${fighterAWins ? 'winner-column-cell' : ''}">${fa.height || "N/A"}</td>
+              <td class="${fighterBWins ? 'winner-column-cell' : ''}">${fb.height || "N/A"}</td>
+            </tr>
+            <tr class="${window.aiMode !== "neutralAI" && rowToHighlight === 4 ? 'rationale-row' : ''}">
+              <td>Strikes Landed/Min</td>
+              <td class="${fighterAWins ? 'winner-column-cell' : ''}">${fa.strikelaM ?? "N/A"}</td>
+              <td class="${fighterBWins ? 'winner-column-cell' : ''}">${fb.strikelaM ?? "N/A"}</td>
+            </tr>
+            <tr class="${window.aiMode !== "neutralAI" && rowToHighlight === 5 ? 'rationale-row' : ''}">
+              <td>Strike Accuracy</td>
+              <td class="${fighterAWins ? 'winner-column-cell' : ''}">${fa.sigSacc ?? "N/A"}</td>
+              <td class="${fighterBWins ? 'winner-column-cell' : ''}">${fb.sigSacc ?? "N/A"}</td>
+            </tr>
+            <tr class="${window.aiMode !== "neutralAI" && rowToHighlight === 6 ? 'rationale-row' : ''}">
+              <td>Strike Defense</td>
+              <td class="${fighterAWins ? 'winner-column-cell' : ''}">${fa.strDef ?? "N/A"}</td>
+              <td class="${fighterBWins ? 'winner-column-cell' : ''}">${fb.strDef ?? "N/A"}</td>
+            </tr>
+            <tr class="${window.aiMode !== "neutralAI" && rowToHighlight === 7 ? 'rationale-row' : ''}">
+              <td>Takedown Accuracy</td>
+              <td class="${fighterAWins ? 'winner-column-cell' : ''}">${fa.tdAcc ?? "N/A"}</td>
+              <td class="${fighterBWins ? 'winner-column-cell' : ''}">${fb.tdAcc ?? "N/A"}</td>
+            </tr>
+            <tr class="${window.aiMode !== "neutralAI" && rowToHighlight === 8 ? 'rationale-row' : ''}">
+              <td>Takedown Defense</td>
+              <td class="${fighterAWins ? 'winner-column-cell' : ''}">${fa.tdDef ?? "N/A"}</td>
+              <td class="${fighterBWins ? 'winner-column-cell' : ''}">${fb.tdDef ?? "N/A"}</td>
+            </tr>
+            <tr class="${window.aiMode !== "neutralAI" && rowToHighlight === 9 ? 'rationale-row' : ''}">
+              <td>Strikes Avoided/Min</td>
+              <td class="${fighterAWins ? 'winner-column-cell' : ''}">${fa.SApM ?? "N/A"}</td>
+              <td class="${fighterBWins ? 'winner-column-cell' : ''}">${fb.SApM ?? "N/A"}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      `;
   }
 
   function loadTrialData() {
