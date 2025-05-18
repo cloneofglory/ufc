@@ -29,6 +29,7 @@ let collectedWagers = {};
 let collectedUserNames = {};
 let playerNumberMap = new Map();
 let expectedParticipants = 3;
+let autoConfirmTriggered = false;
 
 const trialPhase = (function () {
   let appContainer;
@@ -45,25 +46,6 @@ const trialPhase = (function () {
     // Set up WebSocket listener for server messages
     ws.addEventListener("message", handleServerMessage);
   }
-
-function getPlayerNumber(clientID) {
-  const myClientID = sessionStorage.getItem("PROLIFIC_PID");
-  if (clientID === myClientID) {
-    return "Player (You)";
-  }
-  
-  // Check if we already have a mapping for this client ID
-  if (!playerNumberMap.has(clientID)) {
-    // Assign a stable number based on alphabetical ordering of client IDs
-    // This ensures the same client always gets the same number across all users
-    const allClientIDs = [...playerNumberMap.keys(), clientID].sort();
-    const index = allClientIDs.indexOf(clientID);
-    const playerNum = index + 1; // +1 because player numbers start at 1
-    playerNumberMap.set(clientID, playerNum);
-  }
-  
-  return `Player ${playerNumberMap.get(clientID)}`;
-}
 
   function handleServerMessage(event) {
     try {
@@ -105,7 +87,6 @@ function getPlayerNumber(clientID) {
         if (data.trialData) {
           window.currentTrialData = window.currentTrialData || {};
           window.currentTrialData[currentTrial] = data.trialData;
-          console.log("Received trial data for trial", currentTrial);
           loadTrialData();
         }
 
@@ -118,7 +99,6 @@ function getPlayerNumber(clientID) {
           serverAiCorrect =
             currentFightData.winner ==
             currentFightData.predicted_winner_numeric;
-          console.log(`Result phase: Server AI Correct = ${serverAiCorrect}`);
         } else if (currentPhase === "result") {
           console.warn("Result phase started but currentFightData is missing.");
         }
@@ -141,8 +121,6 @@ function getPlayerNumber(clientID) {
         setupDynamicCountdown();
       } else if (data.type === "rejoinSession") {
         clearAllTimers();
-        console.log("Rejoining session:", data);
-
         window.aiMode = data.aiMode || null;
         sessionID = data.sessionID;
         currentTrial = data.trial;
@@ -156,7 +134,6 @@ function getPlayerNumber(clientID) {
         if (data.trialData) {
           window.currentTrialData = window.currentTrialData || {};
           window.currentTrialData[currentTrial] = data.trialData;
-          console.log("Received trial data on rejoin for trial", currentTrial);
           loadTrialData();
         } else {
           console.warn(
@@ -184,12 +161,11 @@ function getPlayerNumber(clientID) {
         setupDynamicCountdown();
       } else if (data.type === "trialsCompleted") {
         clearAllTimers();
-        console.log("All trials completed.");
         postTask.showPostTaskScreen();
       } else if (data.type === "allWagersSubmitted" && !isSolo) {
         if (data.userNames) {
-          Object.assign(collectedUserNames, data.userNames);
-        } 
+          collectedUserNames = { ...data.userNames };
+        }
         displayAllConfirmedWagers(data.wagers);
         const wagersDisplay = groupDelibScreen.querySelector("#confirmed-wagers-display");
         if (wagersDisplay) {
@@ -241,6 +217,7 @@ function getPlayerNumber(clientID) {
     resultConfirmed = currentPhase !== "result";
     chatInputEnabled =
       currentPhase === "groupDelib" && currentSubPhase === "chat";
+      autoConfirmTriggered = false;
 
     if (currentPhase === "groupDelib" && currentSubPhase === "chat") {
       groupChatMessages = [];
@@ -270,9 +247,6 @@ function getPlayerNumber(clientID) {
 
     if (autoTransitionTimerId) clearTimeout(autoTransitionTimerId);
     autoTransitionTimerId = setTimeout(() => {
-      console.log(
-        `Auto-transitioning from ${currentPhase} ${currentSubPhase || ""}`
-      );
       handleAutoConfirm();
     }, phaseDuration);
   }
@@ -295,6 +269,10 @@ function getPlayerNumber(clientID) {
         countdownEl = document.getElementById("group-countdown");
         if (currentSubPhase === "wager") {
           textPrefix = "Bet time remaining:";
+          if (seconds <= 1 && !isGroupWagerConfirmed && !autoConfirmTriggered) {
+            autoConfirmTriggered = true;
+            onConfirmGroupWager();
+          }
         } else if (currentSubPhase === "chat") {
           textPrefix = "Chat time remaining:";
         }
@@ -356,7 +334,6 @@ function getPlayerNumber(clientID) {
   }
 
   function handleAutoConfirm() {
-    console.log(`Auto-confirming phase: ${currentPhase} ${currentSubPhase || ""}`);
     switch (currentPhase) {
       case "initial":
         if (!soloInitialConfirmed) onConfirmInitial();
@@ -364,6 +341,7 @@ function getPlayerNumber(clientID) {
       case "groupDelib":
         if (currentSubPhase === "wager" && !isGroupWagerConfirmed) {
           const myClientID = sessionStorage.getItem("PROLIFIC_PID");
+          const myUserName = sessionStorage.getItem("userName");
           const wagerSlider = groupDelibScreen.querySelector("#group-wager-range");
           initialWager = parseInt(wagerSlider.value, 10);
           
@@ -373,6 +351,7 @@ function getPlayerNumber(clientID) {
             JSON.stringify({
               type: "updateWager",
               clientID: myClientID,
+              username: myUserName,
               sessionID: sessionID,
               wagerType: "initialWager",
               value: initialWager,
@@ -424,8 +403,6 @@ function getPlayerNumber(clientID) {
     movingMsgEl.style.color = "#00ff00";
     contentEl.appendChild(movingMsgEl);
 
-    console.log(`Solo Initial Bet Confirmed: ${initialWager}`);
-
     ws.send(
       JSON.stringify({
         type: "updateWager",
@@ -454,7 +431,6 @@ function getPlayerNumber(clientID) {
       <div id="group-content">
         <div id="group-fight-info"></div>
 
-        <!-- Wager Section -->
         <div id="wager-section" style="display: none;">
           <h3>Your Bet</h3>
           <div class="wager-slider-container">
@@ -466,16 +442,13 @@ function getPlayerNumber(clientID) {
           </div>
         </div>
 
-         <!-- Display Area for Confirmed Wagers -->
          <div id="confirmed-wagers-display" class="confirmed-wagers-display" style="display: none;">
              <h3 class="wagers-title">Initial Bets</h3>
              <div id="wagers-container" class="wagers-container">
-                <!-- Wager columns will be added here by JS -->
-                <p style="color: #aaa; width: 100%; text-align: center;">Waiting for all bets...</p> <!-- Placeholder -->
+                <p style="color: #aaa; width: 100%; text-align: center;">Waiting for all bets...</p>
              </div>
          </div>
 
-        <!-- Chat Section -->
         <div id="chat-section" style="display: none;">
            <h3>Group Chat</h3>
            <div class="chat-container" id="chat-messages"></div>
@@ -527,26 +500,21 @@ function getPlayerNumber(clientID) {
       return;
     }
 
-    // Create a map of client IDs to player numbers
-    const playerMap = {};
-    clientIDs.forEach((id, index) => {
-      playerMap[id] = `Player ${index + 1}`;
-    });
-
     clientIDs.forEach((clientID) => {
       const wagerValue = wagers[clientID];
       const isCurrentUser = clientID === currentUserClientID;
+      let displayName = collectedUserNames[clientID] || clientID; 
 
       const column = document.createElement("div");
       column.classList.add("wager-column");
       if (isCurrentUser) {
         column.classList.add("my-wager");
+        displayName += " (You)";
       }
 
       const idElement = document.createElement("div");
       idElement.classList.add("wager-participant-id");
-      const playerLabel = playerMap[clientID];
-      idElement.textContent = isCurrentUser ? `${playerLabel} (You)` : playerLabel;
+      idElement.textContent = displayName += " 🤹‍♂️";
 
       const valueElement = document.createElement("div");
       valueElement.classList.add("wager-value");
@@ -571,7 +539,7 @@ function getPlayerNumber(clientID) {
 
       groupChatMessages.push({
         user: clientID,
-        userName: sessionStorage.getItem("userName") || "Unknown",
+        userName: sessionStorage.getItem("userName"),
         message: message,
         timestamp: timestamp,
       });
@@ -580,7 +548,7 @@ function getPlayerNumber(clientID) {
         JSON.stringify({
           type: "chat",
           clientID: clientID,
-          userName: sessionStorage.getItem("userName") || "Unknown",
+          userName: sessionStorage.getItem("userName"),
           sessionID: sessionID,
           message: message,
           timestamp: timestamp,
@@ -604,8 +572,6 @@ function getPlayerNumber(clientID) {
     confirmButton.disabled = true;
     confirmButton.textContent = "Bet Confirmed";
 
-    console.log(`Group Initial Bet Confirmed: ${initialWager}`);
-
     const myClientID = sessionStorage.getItem("PROLIFIC_PID");
     const myUserName = sessionStorage.getItem("userName") || "You";
     
@@ -616,6 +582,7 @@ function getPlayerNumber(clientID) {
       JSON.stringify({
         type: "updateWager",
         clientID: myClientID,
+        username: myUserName,
         sessionID: sessionID,
         wagerType: "initialWager",
         value: initialWager,
@@ -625,6 +592,7 @@ function getPlayerNumber(clientID) {
       JSON.stringify({
         type: "confirmDecision",
         clientID: myClientID,
+        username: myUserName,
         sessionID: sessionID,
         phase: "groupDelib",
       })
@@ -681,8 +649,6 @@ function getPlayerNumber(clientID) {
     movingMsgEl.style.color = "#00ff00";
     contentEl.appendChild(movingMsgEl);
 
-    console.log(`Final Bet Confirmed: ${finalWager}`);
-
     ws.send(
       JSON.stringify({
         type: "updateWager",
@@ -725,8 +691,6 @@ function getPlayerNumber(clientID) {
     const nextButton = resultScreen.querySelector("#btn-next-trial");
     nextButton.disabled = true;
     nextButton.textContent = "Proceeding...";
-
-    console.log("Proceeding to next trial from Result phase.");
 
     // Send confirmation to server
     ws.send(
@@ -806,7 +770,7 @@ function getPlayerNumber(clientID) {
     const fightInfoEl = groupDelibScreen.querySelector("#group-fight-info");
     const wallet = utilities.getWallet();
     fightInfoEl.innerHTML = `
-      <p><strong>Wallet:</strong> $${wallet}</p>
+      <p><strong>💰 Wallet:</strong> $${wallet}</p>
       ${generateFighterTableHTML()}
       <div class="ai-highlight">
         <p><strong>AI Prediction:</strong> ${currentFightData.aiPrediction}</p>
@@ -909,7 +873,7 @@ function getPlayerNumber(clientID) {
     );
     const wallet = utilities.getWallet();
     contentEl.innerHTML = `
-      <p><strong>Wallet:</strong> ${wallet}</p>
+      <p><strong>💰 Wallet::</strong> ${wallet}</p>
       ${generateFighterTableHTML()}
       <div class="ai-highlight">
         <p><strong>AI Prediction:</strong> ${currentFightData.aiPrediction}</p>
@@ -993,8 +957,8 @@ function getPlayerNumber(clientID) {
       }</p>
       <p>${outcomeText}</p>
       <hr style="margin: 10px 0; border-color: #555;">
-      <p>Wallet before: ${walletBefore}</p>
-      <p><strong>Wallet after: ${walletAfter}</strong></p>
+      <p>💰 Wallet before: ${walletBefore}</p>
+      <p><strong>💰 Wallet after: ${walletAfter}</strong></p>
     `;
 
     resultScreen.style.display = "block";
@@ -1034,8 +998,6 @@ function getPlayerNumber(clientID) {
     };
 
     trialResults.push(trialDataPayload);
-
-    console.log(`Saving trial ${currentTrial} data:`, trialDataPayload);
 
     ws.send(
       JSON.stringify({

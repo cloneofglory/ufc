@@ -302,10 +302,13 @@ function startTrialPhase(sessionID) {
         : null,
     aiMode: state.aiMode,
     trialData: currentTrialData,
-    participants: state.participants
+    participants: state.participants,
   });
 
-  if (state.currentPhase === PHASES.GROUP_DELIB && state.currentSubPhase === "chat") {
+  if (
+    state.currentPhase === PHASES.GROUP_DELIB &&
+    state.currentSubPhase === "chat"
+  ) {
     checkAndBroadcastWagers(sessionID);
   }
 
@@ -335,16 +338,14 @@ function transitionToNext(sessionID) {
       if (state.currentSubPhase === "wager") {
         state.currentSubPhase = "chat";
         state.phaseStartTime = Date.now();
-        
-        state.participants.forEach(pid => {
+
+        state.participants.forEach((pid) => {
           if (state.participantData[pid]) {
-            const participantWager = state.participantData[pid].initialWager;
-            if (participantWager === null) {
+            if (state.participantData[pid].initialWager === null) {
               state.participantData[pid].initialWager = 2;
             }
           }
         });
-        
         checkAndBroadcastWagers(sessionID);
       } else {
         state.currentPhase = PHASES.FINAL_DECISION;
@@ -449,7 +450,7 @@ function broadcastChatMessage(data) {
   });
 }
 
-function updateParticipantData(sessionID, clientID, dataType, value) {
+function updateParticipantData(sessionID, clientID, dataType, value, userName) {
   if (!sessionStates.has(sessionID)) {
     console.warn(
       `Attempted to update data for non-existent session: ${sessionID}`
@@ -465,10 +466,12 @@ function updateParticipantData(sessionID, clientID, dataType, value) {
     state.participantData[clientID] = {};
   }
 
+  if (userName) {
+    state.participantData[clientID].userName = userName;
+    clientUserNames.set(clientID, userName);
+  }
+
   state.participantData[clientID][dataType] = value;
-  console.log(
-    `Stored ${dataType} for ${clientID} in session ${sessionID} as: ${value}`
-  );
 
   if (dataType === "initialWager" && state.mode === "group") {
     state.participantData[clientID].wagerConfirmed = true;
@@ -481,32 +484,41 @@ function checkAndBroadcastWagers(sessionID) {
   if (!sessionStates.has(sessionID)) return;
   const state = sessionStates.get(sessionID);
 
-  if (state.mode !== "group" || state.currentSubPhase !== "chat") return;
-
-  const currentWagers = {};
-  const userNames = {};
-
-  for (const pid of state.participants) {
-    if (!state.participantData[pid]) {
-      console.warn(
-        `Missing participantData for ${pid} in session ${sessionID} during wager check.`
-      );
-      state.participantData[pid] = { initialWager: null };
-    }
-
-    const participantWager = state.participantData[pid].initialWager ?? 2;
-    currentWagers[pid] = participantWager;
-    userNames[pid] = clientUserNames.get(pid) || pid;
+  if (
+    state.mode !== "group" ||
+    state.currentPhase !== PHASES.GROUP_DELIB ||
+    state.currentSubPhase !== "chat"
+  ) {
+    return;
   }
 
-  console.log(
-    `Session ${sessionID} trial ${state.currentTrial}: Broadcasting all wagers at chat phase start.`
-  );
+  const currentWagers = {};
+  const userNamesForBroadcast = {};
+
+  for (const pid of state.participants) {
+    if (
+      !state.participantData[pid] ||
+      state.participantData[pid].initialWager === null
+    ) {
+      console.warn(
+        `Missing participantData or initialWager for ${pid} in session ${sessionID} during wager broadcast. This should have been defaulted.`
+      );
+      currentWagers[pid] = 2;
+    } else {
+      currentWagers[pid] = state.participantData[pid].initialWager;
+    }
+    if (state.participantData[pid] && state.participantData[pid].userName) {
+      userNamesForBroadcast[pid] = state.participantData[pid].userName;
+    } else {
+      userNamesForBroadcast[pid] = clientUserNames.get(pid) || pid;
+    }
+  }
+
   broadcastToSession(sessionID, {
     type: "allWagersSubmitted",
     trial: state.currentTrial,
     wagers: currentWagers,
-    userNames: userNames,
+    userNames: userNamesForBroadcast,
   });
 }
 
@@ -579,7 +591,7 @@ wss.on("connection", (ws) => {
                     return acc;
                   }, {})
                 : null,
-           participants: state.participants 
+            participants: state.participants,
           })
         );
         console.log(
@@ -610,11 +622,7 @@ wss.on("connection", (ws) => {
           state.currentPhase === PHASES.GROUP_DELIB &&
           state.currentSubPhase === "chat"
         ) {
-          const chatData = {
-            ...data,
-            userName: clientUserNames.get(clientID) || clientID
-          };
-          broadcastChatMessage(chatData);
+          broadcastChatMessage(data);
         } else {
           console.log(
             `Chat message from ${clientID} ignored: Not in group chat phase.`
@@ -766,7 +774,15 @@ wss.on("connection", (ws) => {
         );
         return;
       }
-      updateParticipantData(sessionID, clientID, data.wagerType, wagerValue);
+      updateParticipantData(sessionID, clientID, data.wagerType, wagerValue, data.username);
+      if (data.wagerType === "initialWager" && state.mode === "group") {
+        broadcastToSession(sessionID, {
+          type: "individualWager",
+          clientID: clientID,
+          userName: data.username,
+          wager: wagerValue
+        });
+      }
       ws.send(
         JSON.stringify({
           type: "wagerUpdated",

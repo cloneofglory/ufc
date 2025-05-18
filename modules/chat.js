@@ -14,9 +14,7 @@ const chat = (() => {
       // Listen for incoming messages on the WebSocket.
       ws.addEventListener("message", function(event) {
         try {
-          const data = JSON.parse(event.data);
-          console.log("Received message:", data);
-  
+          const data = JSON.parse(event.data);  
           // Get the current user's sessionID and clientID
           const currentSessionID = sessionStorage.getItem('sessionID');
           const currentClientID = sessionStorage.getItem('PROLIFIC_PID');
@@ -29,9 +27,7 @@ const chat = (() => {
             data.sessionID === currentSessionID &&
             data.clientID !== currentClientID 
           ) {
-            // Append the received message to the chat container.
-            const senderName = data.userName || data.clientID;
-            appendMessage(senderName, data.message);
+            appendMessage(data.userName, data.message);
           }
         } catch (error) {
           console.error("Chat: Error parsing incoming message", error);
@@ -52,42 +48,11 @@ const chat = (() => {
         return;
       }
       
-      let displayName;
+      let displayName = senderName;
       if (senderName === "You") {
-        displayName = "Player (You)";
+        displayName = `${sessionStorage.getItem("userName")} (You)`;
       } else {
-        const existingMessages = chatContainer.querySelectorAll(".chat-message");
-        let playerNumber = 1;
-        let found = false;
-        
-        for (let i = 0; i < existingMessages.length; i++) {
-          const nameElement = existingMessages[i].querySelector(".user-name");
-          if (nameElement && nameElement.dataset.originalName === senderName) {
-            displayName = nameElement.textContent.split(":")[0];
-            found = true;
-            break;
-          }
-        }
-        
-        if (!found) {
-          const usedNumbers = new Set();
-          for (let i = 0; i < existingMessages.length; i++) {
-            const nameElement = existingMessages[i].querySelector(".user-name");
-            if (nameElement) {
-              const text = nameElement.textContent;
-              const match = text.match(/Player (\d+)/);
-              if (match) {
-                usedNumbers.add(parseInt(match[1]));
-              }
-            }
-          }
-          
-          while (usedNumbers.has(playerNumber)) {
-            playerNumber++;
-          }
-          
-          displayName = `Player ${playerNumber}`;
-        }
+        displayName = senderName;
       }
       
       const msgDiv = document.createElement("div");
@@ -96,7 +61,7 @@ const chat = (() => {
       const nameSpan = document.createElement("span");
       nameSpan.classList.add("user-name");
       nameSpan.dataset.originalName = senderName;
-      nameSpan.textContent = displayName + ":";
+      nameSpan.textContent = displayName + " 🤹‍♂️:";
       
       const messageSpan = document.createElement("span");
       messageSpan.classList.add("message-text");
